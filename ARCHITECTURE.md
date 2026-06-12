@@ -157,7 +157,7 @@ Separation of concerns:
 | scoring | `scoreListing(listingId)` | internal action | full §4 pass |
 | comps | `getOrFetchComp(ymm, mileageBucket)` | internal action | cache → MarketCheck → curve |
 | comps | `upsertComp(row)` | internal mutation | cache write (also the operator/MCP seeding path) |
-| partsCosts | `lookup(year, make, model, part)` | query | median + sampleSize (drawer shows its work) |
+| partsCosts | `lookup(year, make, model, part)` | query | median + sampleSize (drawer shows its work); exact year first, then nearest year within ±2 (`matchedYear` reports which); null when the YMM has no data |
 | partsCosts | `seedBatch(rows)` | internal mutation | CSV import |
 | pipeline | `board` | query | kanban, grouped by stage |
 | pipeline | `moveStage`, `setNumbers`, `setNotes` | mutation | board ops |
@@ -185,6 +185,10 @@ Spec §3 tables are adopted as written: `searches`, `listings`, `comps`, `pipeli
   last-run time and # new deals; M6 gate requires failure isolation to be observable.
 - **`settings.marketcheckKey`** (optional) — §8 Settings view lists a MarketCheck key field.
 - **`settings.alertChannelFallback`** ("log") — implicit; not a schema field, a behavior.
+- **`comps.source`** (optional) — comp-set provenance ("marketcheck_sold"|"marketcheck_active");
+  mirrors the listing's `compSource` so cached comps stay auditable.
+- **`alerts.by_listing`, `pipeline.by_listing` indexes** — alert dedupe and pursue-twice
+  lookups are by listing id; without these they would be table scans.
 
 ## 6. Valuation + recon (the scoring engine, §4 + standing overrides)
 

@@ -6,7 +6,7 @@ STATUS: IN_PROGRESS
 ## Milestones
 
 - [x] M0 — ARCHITECTURE.md written + Reviewer-approved ✅ (cycle 1, 2026-06-12)
-- [ ] M1 — Convex schema pushed + settings/buy-box seeded
+- [x] M1 — Convex schema pushed + settings/buy-box seeded ✅ (cycle 2, 2026-06-12)
 - [ ] M2 — parse.py + fixture tests green
 - [ ] M3 — facebook.py + ksl.py emit normalized JSON
 - [ ] M4 — /ingest + upsert/dedupe/price-history working
@@ -79,20 +79,29 @@ STATUS: IN_PROGRESS
 
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
-CYCLE 2 — M1 (Architect plan): Convex init, schema push, seeds.
-Files: package.json, convex/schema.ts, convex/partsCosts.ts, convex/settingsFns.ts,
-convex/searches.ts (seed-adjacent CRUD minimum), convex/seed.ts, scripts/build_partscosts.mjs.
-Fits ARCHITECTURE §2 layout; schema = §3 verbatim + documented additions (§5 of ARCHITECTURE).
-Gate: `npx convex dev --once` succeeds (anonymous local deployment — no account access);
-seed run → query returns 7 active §2 searches + settings row (margin 1500, fees 400);
-partsCosts lookup "2019|Chevrolet|Traverse|Engine" returns a median price.
-Predicted failures: convex CLI needs interactive login (use CONVEX_AGENT_MODE=anonymous /
---local); CSV aggregation memory fine (~7k rows); seed payload size — batch at 500 rows.
+CYCLE 3 — M2 (Architect plan): scrapers/parse.py + fixtures + tests.
+Files: scrapers/parse.py, scrapers/car_brands.py (+ scripts/build_car_brands.py generator from
+reference car-brands.js), scrapers/tests/fixtures/ksl_items.json (realistic KSL API item dicts
+shaped per reference data_types/car.py), scrapers/tests/test_parse.py, scrapers/requirements.txt.
+KSL-only override: KSL's path is the JSON API (spec §5 — no HTML); fixtures are saved API JSON,
+the honest equivalent of "saved HTML". FB parse deferred (skip-marked test documents it).
+Normalized shape = §5 keys + `zip` and `postedAt` extras (dedupe needs zip3; daysListed needs
+the post date) — pinned by a JSON-schema test that forbids other extras.
+Gate: `pytest scrapers/tests/` green — extracts year/make/model/trim/mileage/price/titleStatus/
+sellerType from fixtures; dealers filtered out.
+Predicted failures: PyPI unreachable (vendor jsonschema-lite check by hand-rolled validator);
+zip→distance data source unavailable (best-effort distanceMiles=None, documented).
 
 ## Cycle log
 <!-- One entry per cycle: date, milestone, PASS/FAIL, one-line summary -->
 - 2026-06-12 C1 M0 PASS — ARCHITECTURE.md approved by independent reviewer (verdict PASS, 16
   numbered confirmations, 7 advisory notes logged above). KSL envelope verified against hax.py.
+- 2026-06-12 C2 M1 PASS — schema + seeds verified by independent reviewer: 7 §2 searches
+  field-exact, settings 1500/400, 1226 partsCosts keys; aggregation independently recomputed
+  (2012 Civic Engine 1810/n=499 exact match); seed idempotent; no secrets in git. Traverse-null
+  ruled a data limitation handled per recon rule 4. Advisories fixed: NUL byte in
+  build_partscosts.mjs, ARCHITECTURE §5 additions (comps.source, by_listing indexes), ±2-year
+  lookup fallback documented in API surface. Deferred advisory: sturdier seed idempotency key.
 
 ## Data limitations (documented, not failures)
 - 2026-06-12 — `data/carpart_prices.csv` has ZERO price observations for 31 of 98 scraped
