@@ -11,7 +11,7 @@ STATUS: IN_PROGRESS
 - [x] M3 — ksl.py emits normalized JSON (FB deferred stub per override) ✅ (cycle 4, 2026-06-12)
 - [x] M4 — /ingest + upsert/dedupe/price-history working ✅ (cycle 5, 2026-06-12)
 - [x] M5 — scoring engine: §4 formula + MarketCheck MCP comps + 0.70 salvage rule + partsCosts recon ✅ (cycle 6, 2026-06-12)
-- [ ] M6 — Daytona runner + crons firing on schedule
+- [x] M6 — Daytona runner + crons firing on schedule ✅ (cycle 7, 2026-06-12)
 - [ ] M7 — dashboard (feed, builder, pipeline, settings, drawer)
 - [ ] M8 — alerts (Resend/Twilio) with dedupe
 - [ ] M9 — polish, mobile pass, README
@@ -104,7 +104,25 @@ STATUS: IN_PROGRESS
 
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
-CYCLE 7 — M6 (Architect plan): Daytona runner + crons.
+CYCLE 8 — M7 (Architect plan): the complete dashboard (user directive: entire UI/UX,
+easy + friendly). Backend additions per ARCHITECTURE API surface: searches CRUD,
+listings.setDecision (pursue → pipeline row w/ Step-5 targetBuy/walkAway), listings.feed
+filters (source/make/minProfit/minScore/maxDaysListed/specials-only/sort), pipeline.ts
+(board/moveStage/setNumbers/setNotes), alerts.list. Web app (web/, React+Vite+Tailwind TS,
+mobile-first bottom tabs): FeedView (ranked DealCards, HOT ribbon, amber flags, filter bar,
+show-everything defaults), SpecialsView (mechanic-special review queue — the user's manual-
+review surface), PipelineView (6-stage kanban, pointer-event drag + menu fallback),
+SearchBuilderView (rows w/ lastRun/lastError/newDeals + form), SettingsView (margin/fees/
+contacts/keys/cookie + alert log), DetailDrawer (photos, price-history sparkline, CompPanel,
+ReconMathTable rendering breakdown LINES not reconSource label [M5-G], profit math,
+target/walk-away). Loading/empty/error states everywhere; keyboard accessible; dark
+dealer-tool theme, green=money red=risk amber=verify.
+Gate: `npm run build` clean; Playwright e2e — feed renders ranked cards w/ profit+score,
+Pursue moves card to pipeline Lead, drag between stages works (pointer-based DnD chosen for
+e2e reliability over HTML5 dnd API).
+Predicted failures: vite importing ../convex/_generated outside root (fs.allow + tsconfig);
+Playwright browser download blocked by proxy (probe; fall back to system chromium if
+present); drag e2e flakiness (pointer DnD + data-testid drop zones).
 Files: convex/lib/sandboxDriver.ts (driver interface + DaytonaDriver via REST API using
 DAYTONA_API_KEY env + LocalProcessDriver for in-container gate runs), convex/daytona.ts
 (runSearchInSandbox action: config → create → exec run.py → teardown in finally → markRun;
@@ -155,6 +173,25 @@ extras.
 
 ## Cycle log
 <!-- One entry per cycle: date, milestone, PASS/FAIL, one-line summary -->
+- 2026-06-12 C7 M6 PASS — runner+crons verified by independent reviewer with its own bad-config
+  gate run: failure isolation, pool-3 concurrency (timing-observed), idempotent ingest, teardown
+  (no lingering processes), cron ticking with driver_unconfigured + starvation fix held over a
+  70s window, REST envelope ruled plausible+honestly-labeled, local-dispatcher framing ruled
+  RULES#6-compliant. Overrides 1–3 verified implemented as written. Advisories FIXED same
+  cycle: A1 dispatch claim (lastDispatchedAt + listDue in-flight filter), A2 error tail from
+  stdout, A3 auth-header assertion, A4 fbSessionCookie parity in dispatch_local, A6 doc drift
+  (REST not SDK; snapshot = first-deploy README item), A9 bottom band widened to $500.
+  NOTED: A5 per-result error capture (fine for --loop), A7 secret-on-argv (single-tenant,
+  documented), A10 legacy alert rows without reason (cosmetic).
+- 2026-06-12 C6 M5 PASS — scoring engine verified by independent reviewer: every gate number
+  recomputed by hand (dealScore cases, salvage CX-5 0.70-on-clean live row, Terrain engine
+  recon 400+4671+1300 w/ visible breakdown, curve value), hot boundary 1499/1500, curve-never-
+  hot in code, alert dedupe held under rescore, §4 fidelity (no 0.65 in code), arbitrage seeds
+  match override. Advisories FIXED same cycle: B tranny-slang transmission keywords (the one
+  false-HOT direction), A dead-battery misfire, C transactional alert dedupe re-check in
+  recordAlert, D pooled Terrain comp relabeled marketcheck_pooled + provenance section added.
+  NOTED: E–H (negation fragility, reconSource semantics for drawer, missing-mileage curve
+  path) — G explicitly carried to M7 (drawer renders breakdown lines, not the source label).
 - 2026-06-12 C5 M4 PASS — ingest/dedupe/price-history verified by independent reviewer with
   its own crafted fixtures: dedupe (incl. accidental real-world collision + crafted
   within-batch duplicate), price-drop history ordering, SHA-1 re-derived via sha1sum, full

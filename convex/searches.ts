@@ -20,7 +20,13 @@ export const listActive = query({
   },
 });
 
-/** Searches whose schedule says they should run now (cron dispatch). */
+// a dispatch claim older than this is considered dead (2.5× the 120s sandbox
+// timeout) and the search becomes due again
+const CLAIM_TTL_MS = 5 * 60_000;
+
+/** Searches whose schedule says they should run now (cron dispatch).
+ * A search with an in-flight dispatch claim is NOT due — prevents the next
+ * cron tick double-running a slow sandbox (M6 reviewer advisory A1). */
 export const listDue = internalQuery({
   args: { now: v.number() },
   handler: async (ctx, { now }) => {
@@ -28,11 +34,26 @@ export const listDue = internalQuery({
       .query("searches")
       .withIndex("by_active", (q) => q.eq("active", true))
       .collect();
-    return active.filter(
-      (s) =>
+    return active.filter((s) => {
+      const scheduleDue =
         s.lastRunAt === undefined ||
-        s.lastRunAt + s.intervalMinutes * 60_000 <= now
-    );
+        s.lastRunAt + s.intervalMinutes * 60_000 <= now;
+      if (!scheduleDue) return false;
+      const claim = s.lastDispatchedAt;
+      const claimInFlight =
+        claim !== undefined &&
+        claim + CLAIM_TTL_MS > now &&
+        (s.lastRunAt ?? 0) < claim; // run hasn't completed since the claim
+      return !claimInFlight;
+    });
+  },
+});
+
+/** Stamp a dispatch claim (called by the dispatcher before spawning). */
+export const claimDispatch = internalMutation({
+  args: { searchId: v.id("searches") },
+  handler: async (ctx, { searchId }) => {
+    await ctx.db.patch(searchId, { lastDispatchedAt: Date.now() });
   },
 });
 

@@ -6,7 +6,7 @@ import {
   runScrapeInSandbox,
 } from "../daytonaClient";
 
-type Call = { url: string; method: string; body?: any };
+type Call = { url: string; method: string; headers?: Record<string, string>; body?: any };
 
 function fakeFetch(script: Array<{ status?: number; payload?: any; fail?: boolean }>) {
   const calls: Call[] = [];
@@ -14,6 +14,7 @@ function fakeFetch(script: Array<{ status?: number; payload?: any; fail?: boolea
     calls.push({
       url,
       method: init?.method ?? "GET",
+      headers: init?.headers,
       body: init?.body ? JSON.parse(init.body) : undefined,
     });
     const step = script.shift() ?? {};
@@ -50,6 +51,9 @@ describe("daytona REST lifecycle (fetch-injected — live host is proxy-blocked)
     ]);
     expect(calls[0].body.labels).toEqual({ app: "carhunter", search: "scan-a" });
     expect(calls[1].body.command).toContain("run.py --config");
+    for (const call of calls) {
+      expect(call.headers?.Authorization).toBe("Bearer key-1");
+    }
   });
 
   it("TEARDOWN STILL RUNS when exec fails (RULES #6)", async () => {

@@ -26,6 +26,9 @@ export default defineSchema({
     // additions (ARCHITECTURE §5): observability for §8 builder + M6 failure isolation
     lastError: v.optional(v.string()),
     newDealsLastRun: v.optional(v.number()),
+    // dispatch claim — prevents a >60s run being re-dispatched by the next
+    // cron tick (M6 reviewer advisory A1)
+    lastDispatchedAt: v.optional(v.number()),
   }).index("by_active", ["active"]),
 
   // One row per real car, deduped across sources (spec §3)

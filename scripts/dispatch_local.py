@@ -48,9 +48,13 @@ def convex_run(function: str, args_json: str = "{}") -> dict | list | None:
     return json.loads(result.stdout) if result.stdout.strip() else None
 
 
-def build_config(search: dict, ingest_url: str, ingest_secret: str) -> dict:
-    # mirrors the config convex/daytona.ts hands to the sandbox
+def build_config(
+    search: dict, ingest_url: str, ingest_secret: str, fb_cookie: str | None = None
+) -> dict:
+    # mirrors the config convex/daytona.ts hands to the sandbox, including the
+    # FB cookie slot for the source re-enable (M6 reviewer advisory A4)
     return {
+        "fbSessionCookie": fb_cookie,
         "searchId": search["_id"],
         "sources": search["sources"],
         "makes": search["makes"],
@@ -69,14 +73,20 @@ def build_config(search: dict, ingest_url: str, ingest_secret: str) -> dict:
     }
 
 
-def run_one_search(search: dict, args: argparse.Namespace, ingest_url: str, ingest_secret: str) -> dict:
+def run_one_search(
+    search: dict,
+    args: argparse.Namespace,
+    ingest_url: str,
+    ingest_secret: str,
+    fb_cookie: str | None = None,
+) -> dict:
     """The 'sandbox' lifecycle for one search. Always reaps the process."""
     name = search["name"]
     cmd = [
         sys.executable,
         str(RUN_PY),
         "--config",
-        json.dumps(build_config(search, ingest_url, ingest_secret)),
+        json.dumps(build_config(search, ingest_url, ingest_secret, fb_cookie)),
     ]
     if args.items_file:
         # run.py executes with cwd=scrapers/ — relative fixture paths must
@@ -133,10 +143,12 @@ def dispatch_once(args: argparse.Namespace) -> dict:
 
     due = convex_run("searches:listDue", json.dumps({"now": int(time.time() * 1000)})) or []
     log.info("due searches: %d", len(due))
+    settings = convex_run("settings:get") or {}
+    fb_cookie = settings.get("fbSessionCookie")
     results = []
     with ThreadPoolExecutor(max_workers=CONCURRENCY_CAP) as pool:
         for result in pool.map(
-            lambda s: run_one_search(s, args, ingest_url, ingest_secret), due
+            lambda s: run_one_search(s, args, ingest_url, ingest_secret, fb_cookie), due
         ):
             results.append(result)
     summary = {

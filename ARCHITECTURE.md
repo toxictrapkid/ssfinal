@@ -288,9 +288,11 @@ failed; always emits a final JSON summary line for the Daytona action to parse.
 
 `runSearchInSandbox(searchId)` action:
 1. Load search + settings + `INGEST_SECRET`; serialize the sandbox config.
-2. Create sandbox via Daytona SDK (`DAYTONA_API_KEY` env): prebuilt snapshot with Python 3.11 +
-   Playwright + `scrapers/` baked in (built once in M6; KSL path itself is requests-only —
-   Playwright rides along for the FB re-enable).
+2. Create sandbox via the Daytona REST API (`DAYTONA_API_KEY` env; raw REST, no SDK dependency):
+   prebuilt `carhunter-scraper` snapshot with Python 3.11 + Playwright + `scrapers/` baked in
+   (snapshot build is a first-deploy prerequisite — README §10 item; it cannot be built from
+   this egress-blocked container). KSL path is requests-only — Playwright rides along for the
+   FB re-enable.
 3. Exec `python run.py --config <json>` with a hard timeout (120s); stream logs.
 4. `finally`: tear the sandbox down (RULES #6 — nothing persists), then `searches.markRun`
    with error or new-deal count.

@@ -30,6 +30,9 @@ export const dispatchDueSearches = internalAction({
     }
     const batch = due.slice(0, CONCURRENCY_CAP);
     for (const search of batch) {
+      await ctx.runMutation(internal.searches.claimDispatch, {
+        searchId: search._id,
+      });
       await ctx.scheduler.runAfter(0, internal.daytona.runSearchInSandbox, {
         searchId: search._id,
       });
@@ -120,7 +123,9 @@ export const runSearchInSandbox = internalAction({
         error:
           result.exitCode === 0
             ? undefined
-            : `run.py exited ${result.exitCode}: ${result.stderr.slice(0, 300)}`,
+            : // Daytona merges output into `result` (stdout); take its tail —
+              // stderr is always empty here (M6 reviewer advisory A2)
+              `run.py exited ${result.exitCode}: ${result.stdout.slice(-300)}`,
         newDeals,
       });
     } catch (error) {

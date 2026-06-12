@@ -92,8 +92,11 @@ const BUY_BOX = [
 // scoring time from listing text and always surfaced for manual review.
 const ARBITRAGE_SCANS = [
   {
-    name: "Market scan — $2k–$8k, everything",
-    priceMin: 2000,
+    // floor widened $2k -> $500 (never-pre-filter spirit; sub-$500 is parts
+    // listings and scams). The $28k ceiling is the user's own capital
+    // constraint from the §2 buy-box — change it in the Search Builder.
+    name: "Market scan — $500–$8k, everything",
+    priceMin: 500,
     priceMax: 8000,
   },
   {
@@ -122,6 +125,7 @@ const SUPERSEDED_SEED_NAMES = [
   "Arbitrage scan — $2k–$12k, all makes",
   "Arbitrage scan — $12k–$28k, all makes",
   "Mechanic specials & branded titles — $2k–$12k, all makes",
+  "Market scan — $2k–$8k, everything",
 ];
 
 /**
