@@ -135,6 +135,8 @@ export default defineSchema({
     score: v.number(),
     // "hot" (estProfit ≥ margin) | "mechanic_special" (manual-review override)
     reason: v.optional(v.string()),
+    // the price the alert fired at (audit trail — M8 reviewer advisory D)
+    price: v.optional(v.number()),
   }).index("by_listing", ["listingId"]),
 
   // Single-row app settings (spec §3)

@@ -98,11 +98,15 @@ export const sendHotAlert = internalAction({
         url: listing.url,
       })
     );
+    // NOTE (M8 reviewer A): on a KEYED deployment, delivery happens before
+    // the transactional dedupe check — a double-scheduled action could send
+    // twice even though only one row lands. Keyless (this deployment) is
+    // exact-once because delivery IS the row. Before adding delivery keys,
+    // flip to claim-first: recordAlert reserves, then send.
     await ctx.runMutation(internal.alerts.recordAlert, {
       listingId,
       channels: delivered,
       score: listing.dealScore ?? 0,
-      price: listing.price,
       reason,
     });
   },
@@ -119,10 +123,9 @@ export const recordAlert = internalMutation({
     listingId: v.id("listings"),
     channels: v.array(v.string()), // one row per delivered channel, one transaction
     score: v.number(),
-    price: v.number(),
     reason: v.optional(v.string()),
   },
-  handler: async (ctx, { listingId, channels, score, price, reason }) => {
+  handler: async (ctx, { listingId, channels, score, reason }) => {
     const listing = await ctx.db.get(listingId);
     if (!listing) return { suppressed: true };
     if (
@@ -136,9 +139,17 @@ export const recordAlert = internalMutation({
     }
     const sentAt = Date.now();
     for (const channel of channels) {
-      await ctx.db.insert("alerts", { listingId, channel, sentAt, score, reason });
+      await ctx.db.insert("alerts", {
+        listingId,
+        channel,
+        sentAt,
+        score,
+        reason,
+        price: listing.price, // audit: the price this alert fired at (M8 rev. D)
+      });
     }
-    await ctx.db.patch(listingId, { lastAlertPrice: price });
+    // stamp the CURRENT price, not an action-time snapshot (M8 reviewer F)
+    await ctx.db.patch(listingId, { lastAlertPrice: listing.price });
     return { suppressed: false };
   },
 });

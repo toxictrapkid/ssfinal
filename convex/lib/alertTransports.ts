@@ -152,8 +152,10 @@ export function alertBody(listing: {
     listing.dealScore !== undefined ? `Score ${listing.dealScore}/100` : null,
     listing.url,
   ].filter(Boolean) as string[];
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return {
     text: lines.join("\n"),
-    html: lines.map((l) => `<p>${l.replace(/</g, "&lt;")}</p>`).join(""),
+    html: lines.map((l) => `<p>${escapeHtml(l)}</p>`).join(""),
   };
 }

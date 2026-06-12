@@ -13,7 +13,7 @@ STATUS: IN_PROGRESS
 - [x] M5 — scoring engine: §4 formula + MarketCheck MCP comps + 0.70 salvage rule + partsCosts recon ✅ (cycle 6, 2026-06-12)
 - [x] M6 — Daytona runner + crons firing on schedule ✅ (cycle 7, 2026-06-12)
 - [x] M7 — dashboard (feed, builder, pipeline, settings, drawer) ✅ (cycle 8, 2026-06-12)
-- [ ] M8 — alerts (Resend/Twilio) with dedupe
+- [x] M8 — alerts (Resend/Twilio) with dedupe ✅ (cycle 9, 2026-06-12)
 - [ ] M9 — polish, mobile pass, README
 - [ ] FINAL — end-to-end gate in VISION.md
 
@@ -104,6 +104,22 @@ STATUS: IN_PROGRESS
 
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
+CYCLE 10 — M9 (Architect plan): polish + mobile/perf pass + README §10 + optimizer sweep.
+Files: README.md (all §10 items + carried notes: Daytona key env-only, settings exposure,
+pipeline archive, alert at-least-once-on-keyed, KSL-only state, in-container dispatcher,
+snapshot build prerequisite); web: drawer focus trap (M7-A5), e2e data-id selectors (A8),
+feed "showing first N" cap indicator (A11); no-rerender e2e (MutationObserver on unaffected
+cards while one listing updates via /ingest); Lighthouse mobile run on the feed (playwright
+chromium via CHROME_PATH; if the lighthouse npm pull fails, axe-style manual audit +
+document); fresh-clone smoke (clone to /tmp, install, unit+pytest+build against running
+backend); optimizer notes (bundle 89KB gz, N+1 audit of board/alerts joins — small tables,
+documented).
+Gate: Lighthouse mobile usability pass on feed; no re-render of unaffected cards on feed
+update (observed, not claimed); README contains all §10 items; fresh-clone steps actually
+work in a clean dir.
+Predicted failures: lighthouse npm registry/chrome flags friction; MutationObserver test
+flaky w/ skeleton → pin to stable card nodes; fresh-clone pip deps need --break-system-packages?
+
 CYCLE 9 — M8 (Architect plan): alert delivery (Resend email / Twilio SMS) on the already-
 verified dedupe spine. Files: convex/lib/alertTransports.ts (fetch-injectable Resend +
 Twilio clients, retry/backoff, typed results), alerts.ts sendHotAlert (channel selection:
@@ -185,6 +201,15 @@ extras.
 
 ## Cycle log
 <!-- One entry per cycle: date, milestone, PASS/FAIL, one-line summary -->
+- 2026-06-12 C9 M8 PASS — alerts verified by independent reviewer with its OWN fresh hot
+  listing through the full 5-step dedupe matrix (1 alert → same-price 0 → raise 0 → drop
+  exactly 1 → rescoreAll 0); transports envelope-correct (Resend Bearer/JSON, Twilio
+  Basic/form), 4xx fail-fast/5xx retry pinned; multi-channel single-transaction design
+  validated; mechanic_special override regression intact; hot-beats-special reason priority
+  ruled defensible. Advisories FIXED same cycle: B full html escaping, F stamp current price,
+  D alert-row price column, A claim-first note for keyed deployments. NOTED: C partial-
+  channel-failure audit (console-only), E orphan-skip in alerts.list. Reviewer left 1 test
+  listing (VIN 1GNERGKW8MJ919777) + 2 alert rows — no delete path by design.
 - 2026-06-12 C8 M7 PASS — dashboard verified by independent reviewer driving the app itself
   (13 screenshots): build clean, 5/5 e2e, §8 element-by-element table, both overrides counted
   live (all 10 listings incl. negative-profit shown unfiltered; Terrain recon lines + pooled
