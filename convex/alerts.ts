@@ -5,6 +5,13 @@ import {
   query,
 } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  alertBody,
+  alertSubject,
+  decideChannels,
+  sendEmailViaResend,
+  sendSmsViaTwilio,
+} from "./lib/alertTransports";
 
 /** Recent alerts with their listings — the in-app "provide it to me" surface. */
 export const list = query({
@@ -40,13 +47,49 @@ export const sendHotAlert = internalAction({
         : null;
     if (!reason) return;
 
-    // M8: Resend (email) / Twilio (SMS) when keys exist. Until then: log channel.
-    const channel = "log";
+    // Channel selection: Resend email / Twilio SMS when keys + contacts
+    // exist; the log channel is the floor — an alert is never dropped.
+    const settings = await ctx.runQuery(internal.settings.getInternal, {});
+    const plan = decideChannels({
+      resendKey: process.env.RESEND_KEY,
+      twilioSid: process.env.TWILIO_ACCOUNT_SID,
+      twilioToken: process.env.TWILIO_AUTH_TOKEN,
+      twilioFrom: process.env.TWILIO_FROM,
+      alertEmail: settings?.alertEmail,
+      alertPhone: settings?.alertPhone,
+    });
+    const body = alertBody(listing);
+    const delivered: string[] = [];
+
+    if (plan.email) {
+      const result = await sendEmailViaResend({
+        apiKey: process.env.RESEND_KEY!,
+        to: plan.email,
+        subject: alertSubject(reason, listing.title, listing.estProfit),
+        html: body.html,
+      });
+      console.log(JSON.stringify({ event: "alert.email", ok: result.ok, detail: result.detail }));
+      if (result.ok) delivered.push("email");
+    }
+    if (plan.sms) {
+      const result = await sendSmsViaTwilio({
+        accountSid: process.env.TWILIO_ACCOUNT_SID!,
+        authToken: process.env.TWILIO_AUTH_TOKEN!,
+        from: process.env.TWILIO_FROM!,
+        to: plan.sms,
+        body: `${alertSubject(reason, listing.title, listing.estProfit)}\n${body.text}`,
+      });
+      console.log(JSON.stringify({ event: "alert.sms", ok: result.ok, detail: result.detail }));
+      if (result.ok) delivered.push("sms");
+    }
+    // failed deliveries fall back to the log row too — never silently dropped
+    if (delivered.length === 0) delivered.push("log");
+
     console.log(
       JSON.stringify({
         event: "alert.deal",
         reason,
-        channel,
+        channels: delivered,
         listingId,
         title: listing.title,
         price: listing.price,
@@ -57,7 +100,7 @@ export const sendHotAlert = internalAction({
     );
     await ctx.runMutation(internal.alerts.recordAlert, {
       listingId,
-      channel,
+      channels: delivered,
       score: listing.dealScore ?? 0,
       price: listing.price,
       reason,
@@ -74,12 +117,12 @@ export const sendHotAlert = internalAction({
 export const recordAlert = internalMutation({
   args: {
     listingId: v.id("listings"),
-    channel: v.string(),
+    channels: v.array(v.string()), // one row per delivered channel, one transaction
     score: v.number(),
     price: v.number(),
     reason: v.optional(v.string()),
   },
-  handler: async (ctx, { listingId, channel, score, price, reason }) => {
+  handler: async (ctx, { listingId, channels, score, price, reason }) => {
     const listing = await ctx.db.get(listingId);
     if (!listing) return { suppressed: true };
     if (
@@ -91,13 +134,10 @@ export const recordAlert = internalMutation({
       );
       return { suppressed: true };
     }
-    await ctx.db.insert("alerts", {
-      listingId,
-      channel,
-      sentAt: Date.now(),
-      score,
-      reason,
-    });
+    const sentAt = Date.now();
+    for (const channel of channels) {
+      await ctx.db.insert("alerts", { listingId, channel, sentAt, score, reason });
+    }
     await ctx.db.patch(listingId, { lastAlertPrice: price });
     return { suppressed: false };
   },

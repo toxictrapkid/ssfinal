@@ -14,6 +14,7 @@ import type * as crons from "../crons.js";
 import type * as daytona from "../daytona.js";
 import type * as debug from "../debug.js";
 import type * as http from "../http.js";
+import type * as lib_alertTransports from "../lib/alertTransports.js";
 import type * as lib_daytonaClient from "../lib/daytonaClient.js";
 import type * as lib_dedupe from "../lib/dedupe.js";
 import type * as lib_depreciationCurve from "../lib/depreciationCurve.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   daytona: typeof daytona;
   debug: typeof debug;
   http: typeof http;
+  "lib/alertTransports": typeof lib_alertTransports;
   "lib/daytonaClient": typeof lib_daytonaClient;
   "lib/dedupe": typeof lib_dedupe;
   "lib/depreciationCurve": typeof lib_depreciationCurve;
