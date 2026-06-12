@@ -28,6 +28,16 @@ STATUS: IN_PROGRESS
   No Resend/Twilio/MarketCheck REST keys will be provided — alerts use a transport abstraction
   (in-app logged channel when no key), valuation uses MarketCheck MCP in the harness + comps cache.
 
+- **2026-06-12 — ARBITRAGE SCANS, NOT MAKE/MODEL SEARCHES.** User: "do not search for make and
+  models — identify opportunity of arbitrage." Supersedes §2's seven YMM buy-box searches as
+  the SEEDED strategy: seeds become broad all-makes FSBO scans (price-banded for pagination
+  coverage: $2k–$12k clean, $12k–$28k clean, plus a $2k–$12k mechanic-special/branded-title
+  scan with year widened to 2012 to match partsCosts coverage). The scoring engine IS the
+  arbitrage finder — estProfit ranks the whole market; nothing in scoring is make-specific.
+  The legacy 7 YMM searches are deactivated, not deleted (re-enable any in the Search Builder).
+  Honest limit: with no MarketCheck REST key, HOT alerts fire only for comp-cached YMM+buckets
+  (operator/MCP-seeded); everything else values via the flagged curve (amber, never hot).
+
 ## Reference-code reuse map
 <!-- Cycle 1 fills this: file → what we take from it -->
 

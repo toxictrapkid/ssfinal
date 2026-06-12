@@ -78,6 +78,31 @@ def test_fsbo_filter_always_present_and_title_filter_optional():
     assert no_title[-2:] == ["sellerType", "For Sale By Owner"]
 
 
+def test_broad_arbitrage_scan_omits_make_and_model_segments():
+    # standing user override 2026-06-12: all-makes scans; the scoring engine
+    # finds the arbitrage, not the search filter
+    segments = build_search_segments(
+        {
+            "makes": [],
+            "models": [],
+            "priceMin": 2000,
+            "priceMax": 12000,
+            "zip": "84104",
+            "radiusMiles": 150,
+            "cleanTitleOnly": False,
+        }
+    )
+    assert "make" not in segments
+    assert "model" not in segments
+    assert segments == [
+        "priceFrom", "2000",
+        "priceTo", "12000",
+        "zip", "84104",
+        "miles", "150",
+        "sellerType", "For Sale By Owner",
+    ]
+
+
 def test_reference_main_url_segments_round_trip():
     """The builder must speak the exact grammar of the reference main_url."""
     from urllib.parse import unquote_plus

@@ -81,10 +81,56 @@ const BUY_BOX = [
   },
 ];
 
+// Standing user override 2026-06-12: "do not search for make and models —
+// identify opportunity of arbitrage." The SEEDED strategy is broad all-makes
+// FSBO scans; the scoring engine surfaces the mispriced cars. Price bands keep
+// KSL pagination coverage; the mechanic-special scan widens year to 2012
+// (partsCosts dataset coverage) and drops the title/mileage gates — branded
+// titles and dead cars are the highest-margin recon plays.
+const ARBITRAGE_SCANS = [
+  {
+    name: "Arbitrage scan — $2k–$12k, all makes",
+    makes: [] as string[],
+    models: [] as string[],
+    priceMin: 2000,
+    priceMax: 12000,
+    yearMin: 2016,
+    yearMax: 2024,
+    mileageMin: 25000,
+    mileageMax: 130000,
+    cleanTitleOnly: true,
+  },
+  {
+    name: "Arbitrage scan — $12k–$28k, all makes",
+    makes: [] as string[],
+    models: [] as string[],
+    priceMin: 12000,
+    priceMax: 28000,
+    yearMin: 2016,
+    yearMax: 2024,
+    mileageMin: 25000,
+    mileageMax: 130000,
+    cleanTitleOnly: true,
+  },
+  {
+    name: "Mechanic specials & branded titles — $2k–$12k, all makes",
+    makes: [] as string[],
+    models: [] as string[],
+    priceMin: 2000,
+    priceMax: 12000,
+    yearMin: 2012,
+    yearMax: 2024,
+    mileageMin: 0,
+    mileageMax: 200000,
+    cleanTitleOnly: false,
+  },
+];
+
 /**
- * Idempotent seed: settings row (margin 1500, fees 400) + the 7 §2 searches.
- * partsCosts is seeded separately (scripts/seed_partscosts.sh) — the CSV
- * aggregation runs outside Convex.
+ * Idempotent seed: settings row (margin 1500, fees 400) + the arbitrage scans
+ * (standing override of the §2 YMM buy-boxes, which are deactivated if present
+ * — any can be re-enabled from the Search Builder). partsCosts is seeded
+ * separately (scripts/seed_partscosts.sh).
  */
 export const run = internalMutation({
   args: {},
@@ -99,19 +145,34 @@ export const run = internalMutation({
       createdSettings = true;
     }
 
-    let createdSearches = 0;
     const existing = await ctx.db.query("searches").collect();
-    const existingNames = new Set(existing.map((s) => s.name));
+    const byName = new Map(existing.map((s) => [s.name, s]));
+
+    let deactivatedLegacy = 0;
     for (const box of BUY_BOX) {
-      if (existingNames.has(box.name)) continue;
+      const row = byName.get(box.name);
+      if (row?.active) {
+        await ctx.db.patch(row._id, { active: false });
+        deactivatedLegacy++;
+      }
+    }
+
+    let createdSearches = 0;
+    for (const scan of ARBITRAGE_SCANS) {
+      if (byName.has(scan.name)) continue;
       await ctx.db.insert("searches", {
         ...GLOBALS,
-        ...box,
+        ...scan,
         createdAt: Date.now(),
       });
       createdSearches++;
     }
 
-    return { createdSettings, createdSearches, totalSearches: BUY_BOX.length };
+    return {
+      createdSettings,
+      createdSearches,
+      deactivatedLegacy,
+      totalScans: ARBITRAGE_SCANS.length,
+    };
   },
 });
