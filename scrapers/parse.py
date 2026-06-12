@@ -54,9 +54,11 @@ TITLE_KEYWORDS = [
     ("clean title", "clean"),
 ]
 
-# Phrases that out a "private" listing as a dealer (RULES #4 hard filter)
+# Phrases that out a "private" listing as a dealer (RULES #4 hard filter).
+# Deliberately seller-side signals only: bare "dealer" is NOT here because
+# private sellers say "dealer serviced"/"priced below dealer" constantly
+# (M2 reviewer advisory A3).
 DEALER_PHRASES = [
-    "dealer",
     "dealership",
     "stock #",
     "stock#",
@@ -66,7 +68,11 @@ DEALER_PHRASES = [
     "dl#",
     "dlr",
     "our inventory",
-    "financing available oac",
+    "our showroom",
+    "financing available",
+    "we finance",
+    "buy here pay here",
+    "trade-ins welcome",
     "call our sales",
 ]
 
@@ -269,6 +275,14 @@ def normalize_ksl(item: dict, search_zip: str = "84104") -> dict | None:
     if looks_like_dealer(seller_raw, description):
         log.info("filtered dealer listing %s", item.get("id"))
         return None
+    if not seller_raw or seller_raw.strip().lower() in ("unkown", "unknown"):
+        # KSL search results normally carry sellerType; keeping these relies on
+        # the URL-level For+Sale+By+Owner filter, so make it auditable.
+        log.warning(
+            "listing %s has no usable sellerType (%r); keeping as private "
+            "(server-side FSBO filter is the backstop)",
+            item.get("id"), seller_raw,
+        )
 
     listing_id = item.get("id")
     price = item.get("price")
@@ -276,12 +290,22 @@ def normalize_ksl(item: dict, search_zip: str = "84104") -> dict | None:
         log.warning("skipping malformed KSL item (id=%s, price=%s)", listing_id, price)
         return None
 
-    make_raw = item.get("make")
+    def _field(name: str) -> str | None:
+        """Structured field, with the API's 'Unknown'/'Unkown' defaults
+        treated as missing so the title/description fallback can fill them."""
+        value = item.get(name)
+        if isinstance(value, str) and value.strip().lower() in ("", "unknown", "unkown"):
+            return None
+        return value
+
+    make_raw = _field("make")
+    model_raw = _field("model")
+    trim_raw = _field("trim")
     title_bits = [
         str(item.get("makeYear") or ""),
         make_raw or "",
-        item.get("model") or "",
-        item.get("trim") or "",
+        model_raw or "",
+        trim_raw or "",
     ]
     title = " ".join(b for b in title_bits if b).strip() or f"KSL listing {listing_id}"
     parsed = parse_title(title)
@@ -321,9 +345,11 @@ def normalize_ksl(item: dict, search_zip: str = "84104") -> dict | None:
         "price": int(price),
         "mileage": mileage,
         "year": int(year) if year else None,
-        "make": _normalize_brand(str(make_raw)) or make_raw or parsed["make"],
-        "model": item.get("model") or parsed["model"],
-        "trim": item.get("trim") or parsed["trim"],
+        "make": (_normalize_brand(str(make_raw)) if make_raw else None)
+        or make_raw
+        or parsed["make"],
+        "model": model_raw or parsed["model"],
+        "trim": trim_raw or parsed["trim"],
         "vin": vin,
         "titleStatus": detect_title_status(item.get("titleType"), description),
         "sellerType": "private",

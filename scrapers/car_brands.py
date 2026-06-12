@@ -274,7 +274,11 @@ CAR_BRANDS: dict[str, list[str]] = {
     "Integra",
     "Jazz",
     "Legend",
-    "Prelude"
+    "Prelude",
+    "Pilot",
+    "Odyssey",
+    "Ridgeline",
+    "Passport"
   ],
   "Subaru": [
     "BRZ",
@@ -408,7 +412,11 @@ CAR_BRANDS: dict[str, list[str]] = {
     "Urban Cruiser",
     "Verso",
     "Yaris",
-    "Yaris Verso"
+    "Yaris Verso",
+    "Tacoma",
+    "4Runner",
+    "Sienna",
+    "Venza"
   ],
   "BMW": [
     "i3",
@@ -667,7 +675,11 @@ CAR_BRANDS: dict[str, list[str]] = {
     "Sorento",
     "Soul",
     "Sportage",
-    "Venga"
+    "Venga",
+    "Telluride",
+    "Forte",
+    "Stinger",
+    "Seltos"
   ],
   "Land Rover": [
     "109",
@@ -690,7 +702,9 @@ CAR_BRANDS: dict[str, list[str]] = {
     "Nitro",
     "RAM",
     "Stealth",
-    "Viper"
+    "Viper",
+    "Durango",
+    "Dart"
   ],
   "Chrysler": [
     "300 C",
@@ -799,7 +813,9 @@ CAR_BRANDS: dict[str, list[str]] = {
     "Terracan",
     "Trajet",
     "Tucson",
-    "Veloster"
+    "Veloster",
+    "Palisade",
+    "Kona"
   ],
   "Infiniti": [
     "EX",
@@ -884,7 +900,14 @@ CAR_BRANDS: dict[str, list[str]] = {
     "Tiida",
     "Trade",
     "Vanette Cargo",
-    "X-Trail"
+    "X-Trail",
+    "Altima",
+    "Rogue",
+    "Sentra",
+    "Frontier",
+    "Armada",
+    "Titan",
+    "Kicks"
   ],
   "Volvo": [
     "240",

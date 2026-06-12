@@ -132,6 +132,44 @@ def test_looks_like_dealer_unit():
     assert not looks_like_dealer("For Sale By Owner", "one owner, garage kept")
 
 
+def test_dealer_serviced_private_listing_is_not_filtered():
+    # "dealer serviced" is a private-party quality signal, not a dealer tell
+    # (M2 reviewer advisory A3)
+    assert not looks_like_dealer("For Sale By Owner", "always dealer serviced, records since new")
+    assert not looks_like_dealer("For Sale By Owner", "priced below dealer retail")
+
+
+def test_unknown_seller_type_kept_as_private_but_logged(ksl_items, caplog):
+    import logging
+
+    item = dict(ksl_items[0])
+    item["sellerType"] = "Unkown"  # the reference dataclass default spelling
+    with caplog.at_level(logging.WARNING, logger="carhunter.parse"):
+        normalized_item = normalize_ksl(item, search_zip="84104")
+    assert normalized_item is not None
+    assert normalized_item["sellerType"] == "private"
+    assert any("no usable sellerType" in r.message for r in caplog.records)
+
+
+def test_epoch_ms_passthrough():
+    from parse import _epoch_ms
+
+    assert _epoch_ms(1749350000) == 1749350000 * 1000  # seconds -> ms
+    assert _epoch_ms(1749350000123) == 1749350000123  # already ms
+    assert _epoch_ms(0) is None
+    assert _epoch_ms(None) is None
+
+
+def test_unknown_make_model_strings_trigger_title_fallback(ksl_items):
+    item = dict(ksl_items[0])
+    item.update(make="Unknown", model="Unknown", trim=None, makeYear=0,
+                description="2016 Chevy Equinox LT awd runs great")
+    normalized_item = normalize_ksl(item, search_zip="84104")
+    assert normalized_item["make"] == "Chevrolet"
+    assert normalized_item["model"] == "Equinox"
+    assert normalized_item["year"] == 2016
+
+
 # ----------------------------------------------------------- helpers (units)
 
 

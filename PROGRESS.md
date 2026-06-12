@@ -7,7 +7,7 @@ STATUS: IN_PROGRESS
 
 - [x] M0 — ARCHITECTURE.md written + Reviewer-approved ✅ (cycle 1, 2026-06-12)
 - [x] M1 — Convex schema pushed + settings/buy-box seeded ✅ (cycle 2, 2026-06-12)
-- [ ] M2 — parse.py + fixture tests green
+- [x] M2 — parse.py + fixture tests green ✅ (cycle 3, 2026-06-12)
 - [ ] M3 — facebook.py + ksl.py emit normalized JSON
 - [ ] M4 — /ingest + upsert/dedupe/price-history working
 - [ ] M5 — scoring engine: §4 formula + MarketCheck MCP comps + 0.70 salvage rule + partsCosts recon
@@ -79,18 +79,18 @@ STATUS: IN_PROGRESS
 
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
-CYCLE 3 — M2 (Architect plan): scrapers/parse.py + fixtures + tests.
-Files: scrapers/parse.py, scrapers/car_brands.py (+ scripts/build_car_brands.py generator from
-reference car-brands.js), scrapers/tests/fixtures/ksl_items.json (realistic KSL API item dicts
-shaped per reference data_types/car.py), scrapers/tests/test_parse.py, scrapers/requirements.txt.
-KSL-only override: KSL's path is the JSON API (spec §5 — no HTML); fixtures are saved API JSON,
-the honest equivalent of "saved HTML". FB parse deferred (skip-marked test documents it).
-Normalized shape = §5 keys + `zip` and `postedAt` extras (dedupe needs zip3; daysListed needs
-the post date) — pinned by a JSON-schema test that forbids other extras.
-Gate: `pytest scrapers/tests/` green — extracts year/make/model/trim/mileage/price/titleStatus/
-sellerType from fixtures; dealers filtered out.
-Predicted failures: PyPI unreachable (vendor jsonschema-lite check by hand-rolled validator);
-zip→distance data source unavailable (best-effort distanceMiles=None, documented).
+CYCLE 4 — M3 (Architect plan): ksl.py runs locally + facebook.py deferred stub.
+Files: scrapers/ksl.py (reference hax.py requestCars envelope + URL-segment builder, refactored
+w/ retry/backoff + structured logs), scrapers/facebook.py (ScraperDisabled stub), scrapers/
+tests/test_ksl.py (segment builder units + emit-shape gate via fixture passthrough mode).
+ksl.py CLI: --config '<json>', --max-pages, --items-file (offline source for tests), emits
+normalized JSON array on stdout. Gate: run locally emitting ≥1 listing that validates against
+listing.schema.json (jsonschema test). Try LIVE KSL API first (reference headers); if the
+container egress proxy blocks cars.ksl.com, fixture-passthrough satisfies "runs locally" and
+live validation moves to the Daytona sandbox (M6) — reviewer rules on honesty of that framing.
+Predicted failures: KSL bot protection on the proxy endpoint (403 page seen on /), envelope
+drift since KSLHax-1.2 (check response shape), description field absent in search payload
+(M0 advisory A2 — if so, log + plan per-listing detail fetch before M5).
 
 ## Cycle log
 <!-- One entry per cycle: date, milestone, PASS/FAIL, one-line summary -->
@@ -102,6 +102,14 @@ zip→distance data source unavailable (best-effort distanceMiles=None, document
   ruled a data limitation handled per recon rule 4. Advisories fixed: NUL byte in
   build_partscosts.mjs, ARCHITECTURE §5 additions (comps.source, by_listing indexes), ±2-year
   lookup fallback documented in API surface. Deferred advisory: sturdier seed idempotency key.
+- 2026-06-12 C3 M2 PASS — parse.py + fixtures verified by independent reviewer (45→49 tests):
+  every gate field asserted, dealer filter tested both paths, fixture realism diffed against
+  reference dataclass (photo URL format verified to car_item.py docstring), §5 schema pinned
+  w/ drop-each-key rejection, robustness probes clean (no silent failures). Advisories FIXED
+  same cycle: A1 unknown-sellerType now logged+tested; A3 dealer filter no longer eats "dealer
+  serviced" private listings; A5 supplement +23 KSL-region models; A6 "Unknown" make/model
+  trigger title fallback; A4 ms-branch test added. CARRIED: A2 (live description-field check →
+  M3), A4-relist (displayTime bump reconciliation → M4).
 
 ## Data limitations (documented, not failures)
 - 2026-06-12 — `data/carpart_prices.csv` has ZERO price observations for 31 of 98 scraped

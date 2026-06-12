@@ -34,6 +34,16 @@ SUPPLEMENT: dict[str, list[str]] = {
     "Ram": ["1500", "2500", "3500", "ProMaster"],
     "Subaru": ["Outback", "Forester", "Crosstrek", "Impreza", "Legacy", "Ascent", "WRX"],
     "Tesla": ["Model 3", "Model Y", "Model S", "Model X"],
+    # common KSL-region models the reference list lacks (M2 reviewer advisory A5)
+    "Nissan": ["Altima", "Rogue", "Sentra", "Frontier", "Maxima", "Murano",
+               "Pathfinder", "Armada", "Titan", "Kicks"],
+    "Honda": ["Pilot", "Odyssey", "CR-V", "HR-V", "Ridgeline", "Passport"],
+    "Toyota": ["Tacoma", "Tundra", "4Runner", "Highlander", "RAV4", "Sienna", "Venza"],
+    "Kia": ["Telluride", "Sorento", "Sportage", "Soul", "Forte", "Optima",
+            "Stinger", "Carnival", "Seltos"],
+    "Hyundai": ["Santa Fe", "Tucson", "Elantra", "Sonata", "Accent", "Veloster",
+                "Palisade", "Kona"],
+    "Dodge": ["Durango", "Charger", "Challenger", "Journey", "Grand Caravan", "Dart"],
 }
 
 # Common abbreviations sellers use in titles -> canonical brand
