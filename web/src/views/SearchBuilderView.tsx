@@ -63,8 +63,8 @@ export function SearchBuilderView() {
       )}
 
       <div className="space-y-2">
-        {searches
-          ?.sort(
+        {[...(searches ?? [])]
+          .sort(
             (a: Search, b: Search) =>
               Number(b.active) - Number(a.active) || b.createdAt - a.createdAt
           )
@@ -156,6 +156,43 @@ function SearchForm({
   const submit = async () => {
     if (!form.name.trim()) {
       setError("Give the search a name.");
+      return;
+    }
+    // empty numeric fields must error, not silently save 0 (M7 reviewer A3)
+    const numerics: Array<[string, string | number]> = [
+      ["Radius", form.radiusMiles],
+      ["Price min", form.priceMin],
+      ["Price max", form.priceMax],
+      ["Year min", form.yearMin],
+      ["Year max", form.yearMax],
+      ["Miles min", form.mileageMin],
+      ["Miles max", form.mileageMax],
+      ["Interval", form.intervalMinutes],
+    ];
+    for (const [label, raw] of numerics) {
+      if (String(raw).trim() === "" || Number.isNaN(Number(raw))) {
+        setError(`${label} needs a number.`);
+        return;
+      }
+    }
+    if (Number(form.priceMin) > Number(form.priceMax)) {
+      setError("Price min is above price max.");
+      return;
+    }
+    if (Number(form.yearMin) > Number(form.yearMax)) {
+      setError("Year min is above year max.");
+      return;
+    }
+    if (Number(form.mileageMin) > Number(form.mileageMax)) {
+      setError("Miles min is above miles max.");
+      return;
+    }
+    if (Number(form.intervalMinutes) < 1) {
+      setError("Interval must be at least 1 minute.");
+      return;
+    }
+    if (Number(form.radiusMiles) < 1) {
+      setError("Radius must be at least 1 mile.");
       return;
     }
     const payload = {

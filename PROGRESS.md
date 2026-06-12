@@ -12,7 +12,7 @@ STATUS: IN_PROGRESS
 - [x] M4 — /ingest + upsert/dedupe/price-history working ✅ (cycle 5, 2026-06-12)
 - [x] M5 — scoring engine: §4 formula + MarketCheck MCP comps + 0.70 salvage rule + partsCosts recon ✅ (cycle 6, 2026-06-12)
 - [x] M6 — Daytona runner + crons firing on schedule ✅ (cycle 7, 2026-06-12)
-- [ ] M7 — dashboard (feed, builder, pipeline, settings, drawer)
+- [x] M7 — dashboard (feed, builder, pipeline, settings, drawer) ✅ (cycle 8, 2026-06-12)
 - [ ] M8 — alerts (Resend/Twilio) with dedupe
 - [ ] M9 — polish, mobile pass, README
 - [ ] FINAL — end-to-end gate in VISION.md
@@ -104,6 +104,18 @@ STATUS: IN_PROGRESS
 
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
+CYCLE 9 — M8 (Architect plan): alert delivery (Resend email / Twilio SMS) on the already-
+verified dedupe spine. Files: convex/lib/alertTransports.ts (fetch-injectable Resend +
+Twilio clients, retry/backoff, typed results), alerts.ts sendHotAlert (channel selection:
+RESEND_KEY+alertEmail → email; TWILIO_SID/TOKEN/FROM+alertPhone → sms; keyless → log row —
+no keys exist on this deployment by user directive), vitest envelope tests (auth headers,
+endpoints, form encoding) + pure channel-selection tests.
+Gate: hot listing triggers exactly one alert (verified M5/M6 — re-verify); same listing
+does NOT re-alert unless price drops (live: drop hot Traverse below lastAlertPrice 17900 →
+exactly ONE new alert row; rescore again → none); alert row logged (rows carry reason).
+Predicted failures: Twilio form-encoding (not JSON — pin in test); double-channel duplicate
+rows (one row per delivered channel is correct behavior — document).
+
 CYCLE 8 — M7 (Architect plan): the complete dashboard (user directive: entire UI/UX,
 easy + friendly). Backend additions per ARCHITECTURE API surface: searches CRUD,
 listings.setDecision (pursue → pipeline row w/ Step-5 targetBuy/walkAway), listings.feed
@@ -173,6 +185,18 @@ extras.
 
 ## Cycle log
 <!-- One entry per cycle: date, milestone, PASS/FAIL, one-line summary -->
+- 2026-06-12 C8 M7 PASS — dashboard verified by independent reviewer driving the app itself
+  (13 screenshots): build clean, 5/5 e2e, §8 element-by-element table, both overrides counted
+  live (all 10 listings incl. negative-profit shown unfiltered; Terrain recon lines + pooled
+  comp provenance visible in drawer), Step-5 numbers recomputed by hand, no duplicate pipeline
+  rows under triple-click, no XSS, no secrets in bundle. Advisories FIXED same cycle: A1
+  Enter-on-button drawer leak, A2 make+source filters wired, A3 SearchForm validation (empty
+  ≠ 0, min≤max, interval≥1), A4 memo comparator covers all painted fields, A6 contrast bumps,
+  A7 img onerror fallback, A9 sort-copy, A10 Step-5 math moved server-side (listings.get
+  .suggested), A12 tsbuildinfo ignored. CARRIED to M9: A5 focus trap, A8 e2e hardening
+  (data-id selectors), A11 feed pagination + "showing N of M", A13 README notes (pipeline
+  archive, settings exposure, Daytona key env-only). RULING NOTES: View-listing link in
+  drawer acceptable; no Daytona key field in Settings ruled correct (public query).
 - 2026-06-12 C7 M6 PASS — runner+crons verified by independent reviewer with its own bad-config
   gate run: failure isolation, pool-3 concurrency (timing-observed), idempotent ingest, teardown
   (no lingering processes), cron ticking with driver_unconfigured + starvation fix held over a

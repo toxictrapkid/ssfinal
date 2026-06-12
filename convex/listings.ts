@@ -215,10 +215,29 @@ export const feed = query({
   },
 });
 
-/** Single listing for the detail drawer. */
+/** Single listing for the detail drawer, plus the §4 Step-5 suggested
+ * numbers computed HERE — the client renders, it never does deal math. */
 export const get = query({
   args: { listingId: v.id("listings") },
-  handler: async (ctx, { listingId }) => ctx.db.get(listingId),
+  handler: async (ctx, { listingId }) => {
+    const listing = await ctx.db.get(listingId);
+    if (!listing) return null;
+    let suggested: { targetBuy: number; walkAway: number } | null = null;
+    if (
+      listing.estValue !== undefined &&
+      listing.estRecon !== undefined &&
+      listing.estFees !== undefined
+    ) {
+      const settings = await ctx.db.query("settings").first();
+      const margin = settings?.marginThreshold ?? 1500;
+      const net = listing.estValue - listing.estRecon - listing.estFees;
+      suggested = {
+        targetBuy: Math.round(net - margin),
+        walkAway: Math.round(net - margin * 0.6),
+      };
+    }
+    return { ...listing, suggested };
+  },
 });
 
 /**

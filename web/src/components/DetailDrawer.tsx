@@ -137,25 +137,22 @@ export function DetailDrawer({
                   />
                 </div>
               </dl>
-              {listing.estValue !== undefined &&
-                listing.estRecon !== undefined &&
-                listing.estFees !== undefined &&
-                settings && (
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-center">
-                    <div className="rounded-lg bg-emerald-950/60 p-2">
-                      <p className="text-[11px] uppercase tracking-wide text-emerald-500">Target buy</p>
-                      <p className="text-lg font-extrabold text-emerald-300 tabular-nums">
-                        {money(listing.estValue - listing.estRecon - listing.estFees - settings.marginThreshold)}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-rose-950/50 p-2">
-                      <p className="text-[11px] uppercase tracking-wide text-rose-500">Walk away</p>
-                      <p className="text-lg font-extrabold text-rose-300 tabular-nums">
-                        {money(listing.estValue - listing.estRecon - listing.estFees - settings.marginThreshold * 0.6)}
-                      </p>
-                    </div>
+              {listing.suggested && (
+                <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+                  <div className="rounded-lg bg-emerald-950/60 p-2">
+                    <p className="text-[11px] uppercase tracking-wide text-emerald-500">Target buy</p>
+                    <p className="text-lg font-extrabold text-emerald-300 tabular-nums">
+                      {money(listing.suggested.targetBuy)}
+                    </p>
                   </div>
-                )}
+                  <div className="rounded-lg bg-rose-950/50 p-2">
+                    <p className="text-[11px] uppercase tracking-wide text-rose-500">Walk away</p>
+                    <p className="text-lg font-extrabold text-rose-300 tabular-nums">
+                      {money(listing.suggested.walkAway)}
+                    </p>
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* comp panel — shows its work */}
@@ -232,7 +229,7 @@ export function DetailDrawer({
             >
               View listing on {listing.source.toUpperCase()} ↗
             </a>
-            <p className="pb-6 text-center text-[11px] text-zinc-600">
+            <p className="pb-6 text-center text-[11px] text-zinc-500">
               first seen {relativeTime(listing.firstSeenAt)} · last seen {relativeTime(listing.lastSeenAt)}
             </p>
           </div>

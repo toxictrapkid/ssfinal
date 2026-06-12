@@ -12,6 +12,7 @@ import { EmptyState, SkeletonCard } from "../components/Primitives";
 
 export interface FeedFilters {
   source?: string;
+  make?: string;
   minProfit?: number;
   minScore?: number;
   maxPrice?: number;
@@ -117,6 +118,25 @@ function FilterPanel({
   const num = (value: string) => (value === "" ? undefined : Number(value));
   return (
     <div className="grid grid-cols-2 gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3 sm:grid-cols-3">
+      <Field label="Make">
+        <input
+          value={filters.make ?? ""}
+          onChange={(e) => onChange({ ...filters, make: e.target.value || undefined })}
+          className="input"
+          placeholder="any"
+        />
+      </Field>
+      <Field label="Source">
+        <select
+          value={filters.source ?? ""}
+          onChange={(e) => onChange({ ...filters, source: e.target.value || undefined })}
+          className="input"
+        >
+          <option value="">any</option>
+          <option value="ksl">KSL</option>
+          <option value="facebook">Facebook</option>
+        </select>
+      </Field>
       <Field label="Min profit $">
         <input
           type="number"
@@ -184,7 +204,7 @@ function FilterPanel({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
         {label}
       </span>
       {children}

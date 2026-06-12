@@ -47,22 +47,28 @@ function DealCardInner({ listing, onOpen }: { listing: Listing; onOpen: () => vo
       data-score={listing.dealScore ?? ""}
       data-title={listing.title}
       onClick={onOpen}
-      onKeyDown={(e) => e.key === "Enter" && onOpen()}
+      onKeyDown={(e) => {
+        // only when the card itself is focused — Enter on the nested
+        // decision buttons must not also open the drawer (M7 reviewer A1)
+        if (e.key === "Enter" && e.target === e.currentTarget) onOpen();
+      }}
       tabIndex={0}
       role="button"
       aria-label={`Open ${listing.title}`}
       className="flex cursor-pointer gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-3 outline-none transition hover:border-zinc-600 focus-visible:ring-2 focus-visible:ring-sky-500"
     >
       <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-lg bg-zinc-800">
-        {listing.photoUrl ? (
+        {/* emoji sits behind the img so a dead photo URL degrades to the
+            placeholder instead of a blank box (M7 reviewer A7) */}
+        <div className="absolute inset-0 flex items-center justify-center text-3xl">🚗</div>
+        {listing.photoUrl && (
           <img
             src={listing.photoUrl}
             alt=""
             loading="lazy"
-            className="h-full w-full object-cover"
+            onError={(e) => (e.currentTarget.style.display = "none")}
+            className="relative h-full w-full object-cover"
           />
-        ) : (
-          <div className="flex h-full items-center justify-center text-3xl">🚗</div>
         )}
       </div>
 
@@ -131,14 +137,29 @@ function DealCardInner({ listing, onOpen }: { listing: Listing; onOpen: () => vo
   );
 }
 
-export const DealCard = memo(
-  DealCardInner,
-  (prev, next) =>
-    prev.listing._id === next.listing._id &&
-    prev.listing.price === next.listing.price &&
-    prev.listing.dealScore === next.listing.dealScore &&
-    prev.listing.estProfit === next.listing.estProfit &&
-    prev.listing.status === next.listing.status &&
-    prev.listing.decision === next.listing.decision &&
-    prev.listing.hot === next.listing.hot
+// every field this card PAINTS must be compared, or updates render stale
+// (M7 reviewer A4)
+const PAINTED_FIELDS = [
+  "_id",
+  "title",
+  "price",
+  "dealScore",
+  "estProfit",
+  "estValue",
+  "status",
+  "decision",
+  "hot",
+  "mechanicSpecial",
+  "compSource",
+  "reconSource",
+  "titleStatus",
+  "mileage",
+  "distanceMiles",
+  "daysListed",
+  "photoUrl",
+  "source",
+] as const;
+
+export const DealCard = memo(DealCardInner, (prev, next) =>
+  PAINTED_FIELDS.every((field) => prev.listing[field] === next.listing[field])
 );

@@ -10,3 +10,4 @@ __pycache__/
 playwright-report/
 test-results/
 data/.partscosts_batches/
+web/tsconfig.tsbuildinfo
