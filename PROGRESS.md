@@ -8,7 +8,7 @@ STATUS: IN_PROGRESS
 - [x] M0 — ARCHITECTURE.md written + Reviewer-approved ✅ (cycle 1, 2026-06-12)
 - [x] M1 — Convex schema pushed + settings/buy-box seeded ✅ (cycle 2, 2026-06-12)
 - [x] M2 — parse.py + fixture tests green ✅ (cycle 3, 2026-06-12)
-- [ ] M3 — facebook.py + ksl.py emit normalized JSON
+- [x] M3 — ksl.py emits normalized JSON (FB deferred stub per override) ✅ (cycle 4, 2026-06-12)
 - [ ] M4 — /ingest + upsert/dedupe/price-history working
 - [ ] M5 — scoring engine: §4 formula + MarketCheck MCP comps + 0.70 salvage rule + partsCosts recon
 - [ ] M6 — Daytona runner + crons firing on schedule
@@ -71,26 +71,34 @@ STATUS: IN_PROGRESS
 ## Reviewer advisories carried forward (from M0 PASS — address at the noted milestone)
 - M2/M3: confirm KSL search API returns `description` (Car dataclass lacks it; recon keywords
   need it; if absent, add per-listing detail fetch before M5).
-- M3: validate extended URL segments (mileageFrom, yearTo, sellerType/For+Sale+By+Owner) against
-  live KSL — not all are in the reference main_url grammar.
+- FIRST LIVE RUN (M6 sandbox or post-allowlist; was "M3"): validate extended URL segments
+  (mileageFrom, yearTo, sellerType/For+Sale+By+Owner) + segment-order insensitivity against
+  live KSL — not all are in the reference main_url grammar. If a live 403 appears, suspect
+  envelope drift first (Referer already removed for wire fidelity, M3 reviewer A1).
 - M2: pin down where distanceMiles is computed (spec §5: location → distance from zip in parse.py).
 - M4: relist rule — a "gone" listing that reappears flips back to "active" (VISION #5 tracks relists).
 - M4: document the gone/sold conflation (no spec trigger for "sold").
 
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
-CYCLE 4 — M3 (Architect plan): ksl.py runs locally + facebook.py deferred stub.
-Files: scrapers/ksl.py (reference hax.py requestCars envelope + URL-segment builder, refactored
-w/ retry/backoff + structured logs), scrapers/facebook.py (ScraperDisabled stub), scrapers/
-tests/test_ksl.py (segment builder units + emit-shape gate via fixture passthrough mode).
-ksl.py CLI: --config '<json>', --max-pages, --items-file (offline source for tests), emits
-normalized JSON array on stdout. Gate: run locally emitting ≥1 listing that validates against
-listing.schema.json (jsonschema test). Try LIVE KSL API first (reference headers); if the
-container egress proxy blocks cars.ksl.com, fixture-passthrough satisfies "runs locally" and
-live validation moves to the Daytona sandbox (M6) — reviewer rules on honesty of that framing.
-Predicted failures: KSL bot protection on the proxy endpoint (403 page seen on /), envelope
-drift since KSLHax-1.2 (check response shape), description field absent in search payload
-(M0 advisory A2 — if so, log + plan per-listing detail fetch before M5).
+CYCLE 5 — M4 (Architect plan): /ingest + upsert/dedupe/price-history + run.py wire.
+Files: convex/lib/dedupe.ts (pure §5 dedupe key: vin else sha1(year|make|model|round(mileage,
+-3)|zip3) — self-contained sha1, vitest-tested against sha1sum vectors), convex/listings.ts
+(upsertFromScrape internal mutation: insert/price-drop/relist/touch + markStale 48h→gone +
+feed/get/setDecision minimal), convex/http.ts (POST /ingest, X-Ingest-Secret vs INGEST_SECRET
+env), convex/scoring.ts (M5 placeholder scoreListing — logs + no-op so the data flow is wired),
+scrapers/run.py (multi-source orchestrator: sources→scrapers, skip-disabled, batch POST w/
+retry; satisfies spec §9 step 4 "wire scrapers to POST"), vitest dev setup.
+Relist rule (M0/M2 advisory): a "gone" listing that reappears → status active/price_drop,
+firstSeenAt preserved; daysListed anchored to min(postedAt, firstSeenAt) so relist bumps can't
+game maxDaysListed. Gone/sold conflation documented: no sold signal from KSL search; "sold" is
+a manual decision or future detail-fetch heuristic — feed treats both as out-of-market.
+Gate: POST same fixture batch twice → one row per dedupeKey; then lower-price batch → price-
+History appended + status "price_drop". Run live against self-hosted backend HTTP (port 3211)
+via run.py; pytest + vitest green.
+Predicted failures: Convex isolate lacks crypto.subtle in mutations (hence self-contained
+sha1); site-proxy port mismatch for HTTP actions (verify 3211); validator strictness on §5
+extras.
 
 ## Cycle log
 <!-- One entry per cycle: date, milestone, PASS/FAIL, one-line summary -->
@@ -102,6 +110,13 @@ drift since KSLHax-1.2 (check response shape), description field absent in searc
   ruled a data limitation handled per recon rule 4. Advisories fixed: NUL byte in
   build_partscosts.mjs, ARCHITECTURE §5 additions (comps.source, by_listing indexes), ±2-year
   lookup fallback documented in API surface. Deferred advisory: sturdier seed idempotency key.
+- 2026-06-12 C4 M3 PASS — ksl.py verified by independent reviewer: envelope matched to hax.py
+  line-by-line (one divergence found — Referer that the reference never sends on the wire —
+  FIXED same cycle + asserted in test); CLI emit gate re-run independently (6 listings, 0
+  schema errors, exit-2 typed failure on live path); fixture-passthrough framing ruled "honest
+  satisfaction, not a dodge" given the verified egress-proxy block. Advisories fixed: A1
+  Referer dropped, A2 live-segment advisory re-tagged to first live run, A3 malformed-JSON
+  retry test added, A4 backoff doc corrected (2s·4s), A5 max-pages comment de-weighted.
 - 2026-06-12 C3 M2 PASS — parse.py + fixtures verified by independent reviewer (45→49 tests):
   every gate field asserted, dealer filter tested both paths, fixture realism diffed against
   reference dataclass (photo URL format verified to car_item.py docstring), §5 schema pinned

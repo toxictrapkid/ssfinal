@@ -32,8 +32,8 @@ PROXY_URL = "https://cars.ksl.com/nextjs-api/proxy?"
 API_ENDPOINT = "/classifieds/cars/search/searchByUrlParams"
 PER_PAGE = 24  # reference value — KSL's own page size
 MAX_RETRIES = 3
-BACKOFF_SECONDS = (2, 4, 8)
-DEFAULT_MAX_PAGES = 5  # reference default
+BACKOFF_SECONDS = (2, 4)  # waits between the 3 attempts
+DEFAULT_MAX_PAGES = 5  # matches requestAllCars' signature default (GUI passes its own)
 
 
 class KslApiError(RuntimeError):
@@ -95,6 +95,10 @@ def _request_page(
             "body": body,
         },
     }
+    # Exactly the headers the reference sends on the wire. hax.py builds an
+    # adjusted_headers dict with a Referer but then posts with the ORIGINAL
+    # headers (hax.py:65), so no Referer goes out — we match that behavior
+    # (M3 reviewer finding #6).
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -103,7 +107,6 @@ def _request_page(
         "Content-Type": "application/json",
         "Host": "cars.ksl.com",
         "Origin": "https://cars.ksl.com",
-        "Referer": "https://cars.ksl.com/search/" + "/".join(segments),
     }
 
     last_error: Exception | None = None

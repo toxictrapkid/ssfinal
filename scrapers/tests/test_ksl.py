@@ -158,6 +158,25 @@ def test_request_envelope_matches_reference_contract():
     assert body[-6:] == ["perPage", 24, "page", 1, "es_query_group", None]
     assert call["headers"]["Host"] == "cars.ksl.com"
     assert call["headers"]["Origin"] == "https://cars.ksl.com"
+    # the reference never sends Referer on the wire (hax.py builds
+    # adjusted_headers but posts the original dict) — neither do we
+    assert "Referer" not in call["headers"]
+
+
+def test_retry_on_malformed_json_body(monkeypatch):
+    import ksl as ksl_module
+
+    monkeypatch.setattr(ksl_module.time, "sleep", lambda s: None)
+    raw = json.loads(FIXTURE.read_text())
+    session = FakeSession(
+        [
+            FakeResponse(status_code=200, payload=None, text="<html>not json</html>"),
+            FakeResponse(payload=_items_payload(raw)),
+        ]
+    )
+    items = _request_page(session, [], page=1)
+    assert len(items) == len(raw)
+    assert len(session.calls) == 2
 
 
 def test_retry_then_success(monkeypatch):

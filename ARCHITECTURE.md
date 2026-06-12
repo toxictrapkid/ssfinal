@@ -261,8 +261,10 @@ walkAway  = estValue − estRecon − estFees − marginThreshold·0.6
 - POST `https://cars.ksl.com/nextjs-api/proxy?` with the reference's exact envelope
   (`endpoint:"/classifieds/cars/search/searchByUrlParams"`, body = segments +
   `["perPage",24,"page",N,"es_query_group",null]`, Host/Origin/UA headers).
-- Paginate until empty page or `max_pages`; retry/backoff (3 attempts, 2s·4s·8s) on every
+- Paginate until empty page or `max_pages`; retry/backoff (3 attempts, waits 2s·4s) on every
   network call; structured JSON logs to stderr; no bare asserts (replaced with typed errors).
+  No Referer header — the reference computes one but never sends it (hax.py posts the
+  original dict); wire fidelity wins.
 - Field map = reference `data_types/car.py`: `makeYear→year`, `titleType→titleStatus`,
   `sellerType "Dealership"→dealer` (dropped), `"For Sale By Owner"→private`, photo id → photo
   URL, `createTime/displayTime→daysListed`, `id→sourceListingId`.
