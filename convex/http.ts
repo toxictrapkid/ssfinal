@@ -7,9 +7,13 @@ const MAX_BATCH = 200;
 /**
  * POST /ingest — the only inbound path from scrapers (Daytona sandboxes).
  * Auth: X-Ingest-Secret must equal the INGEST_SECRET deployment env var.
- * Body: { searchId?, source, listings: NormalizedListing[] } (§5 shape; the
- * upsert mutation's validator is the hard contract — structurally invalid
- * items are skipped here with a count so one bad item can't sink a batch).
+ * Body: { searchId?, listings: NormalizedListing[] } (§5 shape). Two layers:
+ * a shallow structural pre-filter here (skips garbage items, counted as
+ * preSkipped), then the upsert mutation's validator as the hard contract —
+ * an item that passes the pre-filter but fails the validator 422s the whole
+ * batch atomically. Acceptable: parse.py is the only producer and emits the
+ * exact §5 shape. Secret check is a plain compare (accepted: 48-hex random
+ * secret makes timing attacks impractical).
  */
 const ingest = httpAction(async (ctx, request) => {
   const expected = process.env.INGEST_SECRET;

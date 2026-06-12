@@ -91,7 +91,17 @@ export const upsertFromScrape = internalMutation({
       const patch: Record<string, unknown> = {
         lastSeenAt: now,
         daysListed: daysListedFor(now, item.postedAt, existing.firstSeenAt),
+        // full identity refresh — a relist under a new KSL id must not keep
+        // the dead listing's id/title/titleStatus (M4 reviewer advisory A1)
+        sourceListingId: item.sourceListingId,
         url: item.url,
+        title: item.title,
+        titleStatus: item.titleStatus,
+        vin: item.vin ?? existing.vin,
+        year: item.year ?? existing.year,
+        make: item.make ?? existing.make,
+        model: item.model ?? existing.model,
+        trim: item.trim ?? existing.trim,
         photoUrl: item.photoUrl ?? existing.photoUrl,
         photos: item.photos.length ? item.photos : existing.photos,
         description: item.description ?? existing.description,
@@ -105,6 +115,9 @@ export const upsertFromScrape = internalMutation({
         patch.status = "price_drop";
       } else if (wasOffMarket) {
         patch.status = "active"; // relist (VISION #5)
+      } else if (priceChanged && existing.status === "price_drop") {
+        // a raise retracts the drop — don't advertise stale price_drop (A2)
+        patch.status = "active";
       }
       await ctx.db.patch(existing._id, patch);
 

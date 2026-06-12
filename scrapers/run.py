@@ -45,11 +45,13 @@ def post_batch(
     ingest_url: str,
     ingest_secret: str,
     search_id: str | None,
-    source: str,
     batch: list[dict],
 ) -> dict:
-    """POST one batch with retry/backoff; returns the ingest summary."""
-    payload: dict[str, Any] = {"source": source, "listings": batch}
+    """POST one batch with retry/backoff; returns the ingest summary.
+
+    No batch-level source label — each listing carries its own `source`
+    (mixed-source batches are legal once FB re-enables)."""
+    payload: dict[str, Any] = {"listings": batch}
     if search_id:
         payload["searchId"] = search_id
 
@@ -89,7 +91,9 @@ def post_batch(
 def run_source(source: str, config: dict, args: argparse.Namespace) -> list[dict]:
     scraper = SCRAPERS.get(source)
     if scraper is None:
-        raise ScraperDisabled(f"{source}: unknown source")
+        # an unknown source is a config bug, not a deliberate deferral —
+        # count it as a failure (M4 reviewer advisory A5)
+        raise RuntimeError(f"{source}: unknown source (known: {sorted(SCRAPERS)})")
     if source == "ksl":
         return scraper(config, max_pages=args.max_pages, items_file=args.items_file)
     return scraper(config)
@@ -153,8 +157,7 @@ def main(argv: list[str] | None = None) -> int:
         for start in range(0, len(all_listings), BATCH_SIZE):
             batch = all_listings[start : start + BATCH_SIZE]
             result = post_batch(
-                session, ingest_url, ingest_secret,
-                config.get("searchId"), sources[0], batch,
+                session, ingest_url, ingest_secret, config.get("searchId"), batch,
             )
             summary["posted"] += len(batch)
             for key in totals:

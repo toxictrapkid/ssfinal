@@ -9,7 +9,7 @@ STATUS: IN_PROGRESS
 - [x] M1 — Convex schema pushed + settings/buy-box seeded ✅ (cycle 2, 2026-06-12)
 - [x] M2 — parse.py + fixture tests green ✅ (cycle 3, 2026-06-12)
 - [x] M3 — ksl.py emits normalized JSON (FB deferred stub per override) ✅ (cycle 4, 2026-06-12)
-- [ ] M4 — /ingest + upsert/dedupe/price-history working
+- [x] M4 — /ingest + upsert/dedupe/price-history working ✅ (cycle 5, 2026-06-12)
 - [ ] M5 — scoring engine: §4 formula + MarketCheck MCP comps + 0.70 salvage rule + partsCosts recon
 - [ ] M6 — Daytona runner + crons firing on schedule
 - [ ] M7 — dashboard (feed, builder, pipeline, settings, drawer)
@@ -81,7 +81,22 @@ STATUS: IN_PROGRESS
 
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
-CYCLE 5 — M4 (Architect plan): /ingest + upsert/dedupe/price-history + run.py wire.
+CYCLE 6 — M5 (Architect plan): the §4 scoring engine + MarketCheck-first comps + parts recon.
+Files: convex/lib/scoreMath.ts (pure §4 formula + Step-5 numbers, vitest), convex/lib/
+reconRules.ts (pure keyword classifier + parts-math, vitest), convex/lib/depreciationCurve.ts
+(flagged fallback, vitest), convex/lib/marketcheck.ts (REST driver iff key set — none here),
+convex/comps.ts (cache read/upsert + getOrFetchComp action), convex/scoring.ts (replace
+placeholder: full §4 pass incl. salvage 0.70×clean override, AWD +3%, ±$0.06/mi vs bucket
+midpoint, hot gate excludes curve comps), convex/alerts.ts (M8-shaped placeholder so hot
+flow is wired), seed comps via MarketCheck MCP (operator path through comps:upsertComp —
+no user access needed).
+Gate: vitest known-input tests — estProfit/dealScore exact per §4; hot flips at exactly
+estProfit≥1500; salvage/rebuilt = 0.70×clean-title comp; "needs engine" priced from
+partsCosts median+1300; generic mechanic-special takes pricier component+its labor; comp +
+recon source visible on the listing (live behavioral check on the dev deployment).
+Predicted failures: MCP returns sparse comps for fixture YMMs near 84104 (widen radius /
+fall back to national sample, flag sampleSize); float drift in score assertions (use exact
+fractions); action→mutation patch shape vs schema validators.
 Files: convex/lib/dedupe.ts (pure §5 dedupe key: vin else sha1(year|make|model|round(mileage,
 -3)|zip3) — self-contained sha1, vitest-tested against sha1sum vectors), convex/listings.ts
 (upsertFromScrape internal mutation: insert/price-drop/relist/touch + markStale 48h→gone +
@@ -102,6 +117,15 @@ extras.
 
 ## Cycle log
 <!-- One entry per cycle: date, milestone, PASS/FAIL, one-line summary -->
+- 2026-06-12 C5 M4 PASS — ingest/dedupe/price-history verified by independent reviewer with
+  its own crafted fixtures: dedupe (incl. accidental real-world collision + crafted
+  within-batch duplicate), price-drop history ordering, SHA-1 re-derived via sha1sum, full
+  auth/error matrix (401/400/413/422-with-detail), relist preserving firstSeenAt + daysListed
+  anchor, stale sweep via index, scoring placeholder fired 16x without crashes, run.py
+  failure-isolation semantics ruled correct. Advisories FIXED same cycle: A1 identity refresh
+  on update, A2 price-raise retracts price_drop status, A3 http.ts comment, A5 unknown source
+  = failure, A6 batch-level source label dropped, A4 timing-compare note. DEFERRED: A7
+  convex-test harness (revisit at M5+), A8/A9 accepted rulings logged.
 - 2026-06-12 C1 M0 PASS — ARCHITECTURE.md approved by independent reviewer (verdict PASS, 16
   numbered confirmations, 7 advisory notes logged above). KSL envelope verified against hax.py.
 - 2026-06-12 C2 M1 PASS — schema + seeds verified by independent reviewer: 7 §2 searches
@@ -152,7 +176,10 @@ extras.
 - 2026-06-12 (non-halting, affects M6 live gate): app.daytona.io is ALSO blocked by the
   egress proxy (probed: "Host not in allowlist"). M6 will be built against the Daytona SDK
   behind a sandbox-driver interface and gated with a scripted fake driver, same pattern the
-  M3 reviewer ruled on. Live sandbox validation needs the human to allowlist app.daytona.io
-  (and Daytona sandbox/toolbox hosts) in the environment's network egress settings.
-  RECOMMENDED ALLOWLIST ADDITIONS (one human action unblocks everything live):
-  cars.ksl.com, img.ksl.com, app.daytona.io.
+  M3 reviewer ruled on.
+- 2026-06-12 USER DIRECTIVE (supersedes the allowlist suggestions above): "i dont want to
+  have to give access to anything else." No further access will be requested — no allowlist
+  changes, no additional keys. All remaining gates must be satisfiable fully in-container:
+  M5 valuation uses the MarketCheck MCP already connected to the harness (no user action),
+  M6 gates on the driver abstraction with the real Daytona SDK path code-complete for when
+  the app runs outside this container, M8 alerts gate on the keyless "log" channel.
