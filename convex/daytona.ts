@@ -1,6 +1,7 @@
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 import { runScrapeInSandbox } from "./lib/daytonaClient";
 
 const CONCURRENCY_CAP = 3; // parallel sandboxes per dispatch tick (ARCHITECTURE §8)
@@ -11,8 +12,12 @@ const CONCURRENCY_CAP = 3; // parallel sandboxes per dispatch tick (ARCHITECTURE
  */
 export const dispatchDueSearches = internalAction({
   args: {},
-  handler: async (ctx) => {
-    const due = await ctx.runQuery(internal.searches.listDue, { now: Date.now() });
+  // explicit types break the self-referential api-type cycle (this action
+  // schedules internal.daytona.runSearchInSandbox)
+  handler: async (ctx): Promise<{ due: number; spawned: number }> => {
+    const due: Doc<"searches">[] = await ctx.runQuery(internal.searches.listDue, {
+      now: Date.now(),
+    });
     // Unconfigured driver: leave searches due and untouched so an external
     // runner (scripts/dispatch_local.py) can claim them — stamping lastRunAt
     // here would starve it (in-container mode, no-additional-access directive).

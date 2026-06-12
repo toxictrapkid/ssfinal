@@ -5,6 +5,7 @@ import {
   internalQuery,
 } from "./_generated/server";
 import { v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 import { fetchComps } from "./lib/marketcheck";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000; // spec §3: comps cached 7 days
@@ -69,8 +70,10 @@ export const getOrFetchComp = internalAction({
     zip: v.string(),
     radiusMiles: v.number(),
   },
-  handler: async (ctx, args) => {
-    const cached = await ctx.runQuery(internal.comps.getCached, {
+  // explicit types break the self-referential api-type cycle (this action
+  // calls internal.comps.getCached/upsertComp from its own module)
+  handler: async (ctx, args): Promise<Doc<"comps"> | null> => {
+    const cached: Doc<"comps"> | null = await ctx.runQuery(internal.comps.getCached, {
       ymm: args.ymm,
       mileageBucket: args.mileageBucket,
     });

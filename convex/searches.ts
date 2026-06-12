@@ -1,5 +1,62 @@
-import { internalMutation, internalQuery, query } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server";
 import { v } from "convex/values";
+
+const searchFields = {
+  name: v.string(),
+  sources: v.array(v.string()),
+  location: v.string(),
+  zip: v.string(),
+  radiusMiles: v.number(),
+  priceMin: v.number(),
+  priceMax: v.number(),
+  yearMin: v.number(),
+  yearMax: v.number(),
+  mileageMin: v.number(),
+  mileageMax: v.number(),
+  makes: v.array(v.string()),
+  models: v.array(v.string()),
+  maxDaysListed: v.number(),
+  cleanTitleOnly: v.boolean(),
+  intervalMinutes: v.number(),
+};
+
+/** Search Builder: create a buy-box/scan. */
+export const create = mutation({
+  args: searchFields,
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("searches", {
+      ...args,
+      active: true,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const update = mutation({
+  args: { searchId: v.id("searches"), ...searchFields },
+  handler: async (ctx, { searchId, ...fields }) => {
+    await ctx.db.patch(searchId, fields);
+  },
+});
+
+export const toggleActive = mutation({
+  args: { searchId: v.id("searches"), active: v.boolean() },
+  handler: async (ctx, { searchId, active }) => {
+    await ctx.db.patch(searchId, { active });
+  },
+});
+
+export const remove = mutation({
+  args: { searchId: v.id("searches") },
+  handler: async (ctx, { searchId }) => {
+    await ctx.db.delete(searchId);
+  },
+});
 
 /** All saved buy-boxes, for the Search Builder view. */
 export const list = query({

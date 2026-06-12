@@ -23,6 +23,7 @@ import type * as lib_reconRules from "../lib/reconRules.js";
 import type * as lib_scoreMath from "../lib/scoreMath.js";
 import type * as listings from "../listings.js";
 import type * as partsCosts from "../partsCosts.js";
+import type * as pipeline from "../pipeline.js";
 import type * as scoring from "../scoring.js";
 import type * as searches from "../searches.js";
 import type * as seed from "../seed.js";
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   "lib/scoreMath": typeof lib_scoreMath;
   listings: typeof listings;
   partsCosts: typeof partsCosts;
+  pipeline: typeof pipeline;
   scoring: typeof scoring;
   searches: typeof searches;
   seed: typeof seed;

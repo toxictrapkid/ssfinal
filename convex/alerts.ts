@@ -1,6 +1,24 @@
 import { internal } from "./_generated/api";
-import { internalAction, internalMutation } from "./_generated/server";
+import {
+  internalAction,
+  internalMutation,
+  query,
+} from "./_generated/server";
 import { v } from "convex/values";
+
+/** Recent alerts with their listings — the in-app "provide it to me" surface. */
+export const list = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
+    const rows = await ctx.db.query("alerts").order("desc").take(limit ?? 50);
+    const out = [];
+    for (const row of rows) {
+      const listing = await ctx.db.get(row.listingId);
+      if (listing) out.push({ ...row, listing });
+    }
+    return out;
+  },
+});
 
 /**
  * Hot-deal alerting. M5 wires the flow; M8 adds Resend/Twilio delivery.

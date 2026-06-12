@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+/* dealer-tool feel: dense, dark, fast. green = money, red = pass/risk,
+   amber = verify (curve comps, keyword recon, stale sessions) */
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100 antialiased;
+}
+
+/* thin scrollbars for the kanban + photo strips */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(63 63 70) transparent;
+}
+
+/* shared form input look */
+.input {
+  @apply w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500;
+}
+
+@keyframes pulse-soft {
+  50% {
+    opacity: 0.55;
+  }
+}
+.skeleton {
+  @apply rounded bg-zinc-800;
+  animation: pulse-soft 1.6s ease-in-out infinite;
+}

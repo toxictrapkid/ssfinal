@@ -1,5 +1,5 @@
 import { internal } from "./_generated/api";
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { dedupeKeyFor } from "./lib/dedupe";
 import { normalizedListing } from "./lib/listingValidator";
@@ -155,16 +155,117 @@ export const markStale = internalMutation({
   },
 });
 
-/** Ranked feed (minimal M4 cut — full filter bar lands with the dashboard). */
+/**
+ * Ranked deal feed. Defaults SHOW EVERYTHING (standing user override: never
+ * pre-filter a deal away) — filters only narrow when the user asks.
+ */
 export const feed = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, { limit }) => {
+  args: {
+    limit: v.optional(v.number()),
+    source: v.optional(v.string()),
+    make: v.optional(v.string()),
+    minProfit: v.optional(v.number()),
+    minScore: v.optional(v.number()),
+    maxPrice: v.optional(v.number()),
+    maxDaysListed: v.optional(v.number()),
+    specialsOnly: v.optional(v.boolean()),
+    hotOnly: v.optional(v.boolean()),
+    includeGone: v.optional(v.boolean()),
+    sort: v.optional(v.string()), // "score" (default) | "profit" | "newest" | "price"
+  },
+  handler: async (ctx, args) => {
+    const take = Math.min(args.limit ?? 100, 300);
+    // by_score keeps unscored rows (undefined) last in desc order
     const rows = await ctx.db
       .query("listings")
       .withIndex("by_score")
       .order("desc")
-      .take(Math.min(limit ?? 50, 200));
-    return rows.filter((l) => l.status === "active" || l.status === "price_drop");
+      .take(600);
+    let out = rows.filter((l) =>
+      args.includeGone ? true : l.status === "active" || l.status === "price_drop"
+    );
+    if (args.source) out = out.filter((l) => l.source === args.source);
+    if (args.make)
+      out = out.filter(
+        (l) => (l.make ?? "").toLowerCase() === args.make!.toLowerCase()
+      );
+    if (args.minProfit !== undefined)
+      out = out.filter((l) => (l.estProfit ?? -Infinity) >= args.minProfit!);
+    if (args.minScore !== undefined)
+      out = out.filter((l) => (l.dealScore ?? -1) >= args.minScore!);
+    if (args.maxPrice !== undefined) out = out.filter((l) => l.price <= args.maxPrice!);
+    if (args.maxDaysListed !== undefined)
+      out = out.filter((l) => (l.daysListed ?? 0) <= args.maxDaysListed!);
+    if (args.specialsOnly) out = out.filter((l) => l.mechanicSpecial === true);
+    if (args.hotOnly) out = out.filter((l) => l.hot === true);
+    switch (args.sort) {
+      case "profit":
+        out.sort((a, b) => (b.estProfit ?? -Infinity) - (a.estProfit ?? -Infinity));
+        break;
+      case "newest":
+        out.sort((a, b) => b.firstSeenAt - a.firstSeenAt);
+        break;
+      case "price":
+        out.sort((a, b) => a.price - b.price);
+        break;
+      default:
+        break; // already score-desc from the index
+    }
+    return out.slice(0, take);
+  },
+});
+
+/** Single listing for the detail drawer. */
+export const get = query({
+  args: { listingId: v.id("listings") },
+  handler: async (ctx, { listingId }) => ctx.db.get(listingId),
+});
+
+/**
+ * Pursue / Pass / Contacted (§6). Pursue creates (or revives) the pipeline
+ * row with the §4 Step-5 suggested numbers.
+ */
+export const setDecision = mutation({
+  args: { listingId: v.id("listings"), decision: v.string() },
+  handler: async (ctx, { listingId, decision }) => {
+    if (!["new", "pursue", "pass", "contacted"].includes(decision)) {
+      throw new Error(`invalid decision: ${decision}`);
+    }
+    const listing = await ctx.db.get(listingId);
+    if (!listing) throw new Error("listing not found");
+    await ctx.db.patch(listingId, { decision });
+
+    if (decision === "pursue" || decision === "contacted") {
+      const existing = await ctx.db
+        .query("pipeline")
+        .withIndex("by_listing", (q) => q.eq("listingId", listingId))
+        .first();
+      const settings = await ctx.db.query("settings").first();
+      const margin = settings?.marginThreshold ?? 1500;
+      let targetBuy: number | undefined;
+      let walkAway: number | undefined;
+      if (
+        listing.estValue !== undefined &&
+        listing.estRecon !== undefined &&
+        listing.estFees !== undefined
+      ) {
+        const net = listing.estValue - listing.estRecon - listing.estFees;
+        targetBuy = Math.round(net - margin); // §4 Step 5
+        walkAway = Math.round(net - margin * 0.6);
+      }
+      const stage = decision === "contacted" ? "contacted" : "lead";
+      if (existing) {
+        await ctx.db.patch(existing._id, { stage, updatedAt: Date.now() });
+      } else {
+        await ctx.db.insert("pipeline", {
+          listingId,
+          stage,
+          targetBuy,
+          walkAway,
+          updatedAt: Date.now(),
+        });
+      }
+    }
   },
 });
 
