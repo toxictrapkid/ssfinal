@@ -6,7 +6,7 @@ import {
 } from "./_generated/server";
 import { v } from "convex/values";
 import { curveValue } from "./lib/depreciationCurve";
-import { computeRecon, type PartsCost } from "./lib/reconRules";
+import { classifyDrivetrain, computeRecon, type PartsCost } from "./lib/reconRules";
 import {
   GLOBAL_MILEAGE_BAND,
   adjustValue,
@@ -154,6 +154,11 @@ export const scoreListing = internalAction({
       titleStatus: listing.titleStatus,
     });
     const hot = isHot(estProfit, settings.marginThreshold, compSource);
+    // standing user override: every drivetrain-issue car is surfaced for
+    // manual review regardless of computed profit — the human rules on
+    // mechanic specials, the math just informs
+    const mechanicSpecial =
+      classifyDrivetrain(`${listing.title} ${listing.description ?? ""}`) !== null;
 
     await ctx.runMutation(internal.scoring.applyScore, {
       listingId,
@@ -163,6 +168,7 @@ export const scoreListing = internalAction({
       estProfit,
       dealScore: score,
       hot,
+      mechanicSpecial,
       compSource: compSource ?? undefined,
       compSampleSize: comp?.sampleSize,
       compRef: comp?._id,
@@ -183,6 +189,7 @@ export const applyScore = internalMutation({
     estProfit: v.number(),
     dealScore: v.number(),
     hot: v.boolean(),
+    mechanicSpecial: v.boolean(),
     compSource: v.optional(v.string()),
     compSampleSize: v.optional(v.number()),
     compRef: v.optional(v.id("comps")),
@@ -208,9 +215,11 @@ export const applyScore = internalMutation({
     await ctx.db.patch(listingId, fields);
 
     // Alert dedupe rule (VISION #3): once per car, again only on a price drop
-    // below the price we last alerted at. Full channel delivery lands at M8.
+    // below the price we last alerted at. Mechanic specials alert regardless
+    // of profit (standing user override — manual review). recordAlert
+    // re-checks the dedupe condition transactionally.
     if (
-      fields.hot &&
+      (fields.hot || fields.mechanicSpecial) &&
       (listing.lastAlertPrice === undefined || listing.price < listing.lastAlertPrice)
     ) {
       await ctx.scheduler.runAfter(0, internal.alerts.sendHotAlert, { listingId });

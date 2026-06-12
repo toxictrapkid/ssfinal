@@ -65,6 +65,15 @@ describe("drivetrain classification", () => {
   it("healthy text classifies as nothing", () => {
     expect(classifyDrivetrain("runs and drives excellent")).toBe(null);
   });
+  it("seller slang: 'tranny slips when cold' is a transmission job (advisory B)", () => {
+    expect(classifyDrivetrain("tranny slips when cold")).toBe("transmission");
+    expect(classifyDrivetrain("trans slips between gears")).toBe("transmission");
+    expect(classifyDrivetrain("bad tranny")).toBe("transmission");
+  });
+  it("'dead battery' is NOT a drivetrain replacement (advisory A)", () => {
+    expect(classifyDrivetrain("dead battery, needs a jump")).toBe(null);
+    expect(classifyDrivetrain("found it dead in the driveway")).toBe("generic");
+  });
 });
 
 describe("parts-based recon (RULES #3b)", () => {

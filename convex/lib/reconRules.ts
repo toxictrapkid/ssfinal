@@ -55,10 +55,14 @@ export const CREDIT_NEW_TIRES_BRAKES = -200;
 
 const ENGINE_RE =
   /\b(blown (engine|motor)|needs? (an? )?(new )?(engine|motor)|engine (is )?(blown|bad|gone|shot|knocking|seized)|motor (is )?(blown|bad|gone|shot|seized)|rod knock|knocking|no compression|spun bearing|cracked block|blown head ?gasket)\b/i;
+// "tranny"/"slips" are common seller slang for a dying transmission — missing
+// them inflates estProfit by thousands (M5 reviewer advisory B)
 const TRANS_RE =
-  /\b(bad trans(mission)?|needs? (a )?(new )?trans(mission)?|trans(mission)? (is )?(bad|gone|out|slipping|shot)|slipping|won'?t shift|no (reverse|3rd|third) gear)\b/i;
+  /\b(bad trans(mission)?|bad tranny|needs? (a )?(new )?(trans(mission)?|tranny)|(trans(mission)?|tranny) (is )?(bad|gone|out|slipping|slips|shot)|tranny slips|trans slips|slipping|slips when|won'?t shift|no (reverse|3rd|third) gear)\b/i;
+// "dead" counts (§4 doesn't-start family) but not "dead battery/key fob" —
+// a $150 jump-start is not a drivetrain job (M5 reviewer advisory A)
 const GENERIC_BROKEN_RE =
-  /\b(mechanic'?s? special|doesn'?t run|does not run|won'?t start|doesn'?t start|not running|non.?running|won'?t run|as.?is,? broken|dead|needs? work to run)\b/i;
+  /\b(mechanic'?s? special|doesn'?t run|does not run|won'?t start|doesn'?t start|not running|non.?running|won'?t run|as.?is,? broken|dead(?!\s*(battery|batteries|key|fob|remote|spot|pixel))|needs? work to run)\b/i;
 const ENGINE_CONTEXT_RE = /\b(engine|motor)\b/i;
 
 const SALVAGE_REBUILT_RE = /\b(salvage|rebuilt|reconstructed|branded)\b/i;

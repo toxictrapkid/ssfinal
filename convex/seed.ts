@@ -81,49 +81,47 @@ const BUY_BOX = [
   },
 ];
 
-// Standing user override 2026-06-12: "do not search for make and models —
-// identify opportunity of arbitrage." The SEEDED strategy is broad all-makes
-// FSBO scans; the scoring engine surfaces the mispriced cars. Price bands keep
-// KSL pagination coverage; the mechanic-special scan widens year to 2012
-// (partsCosts dataset coverage) and drops the title/mileage gates — branded
-// titles and dead cars are the highest-margin recon plays.
+// Standing user overrides 2026-06-12:
+//   "do not search for make and models — identify opportunity of arbitrage"
+//   "I will never see a deal if you filter it out before and I never see it"
+// The SEEDED strategy is maximally inclusive market scans: price bands only
+// (pagination coverage), all makes, all titles, all years, all mileages —
+// title/mileage/year are RANKING signals in the scoring engine, never gates.
+// The only hard filter anywhere is private-party-only (the user's own RULES
+// #4 — dealer margin is not our margin). Mechanic specials are identified at
+// scoring time from listing text and always surfaced for manual review.
 const ARBITRAGE_SCANS = [
   {
-    name: "Arbitrage scan — $2k–$12k, all makes",
-    makes: [] as string[],
-    models: [] as string[],
+    name: "Market scan — $2k–$8k, everything",
     priceMin: 2000,
-    priceMax: 12000,
-    yearMin: 2016,
-    yearMax: 2024,
-    mileageMin: 25000,
-    mileageMax: 130000,
-    cleanTitleOnly: true,
+    priceMax: 8000,
   },
   {
-    name: "Arbitrage scan — $12k–$28k, all makes",
-    makes: [] as string[],
-    models: [] as string[],
-    priceMin: 12000,
+    name: "Market scan — $8k–$16k, everything",
+    priceMin: 8000,
+    priceMax: 16000,
+  },
+  {
+    name: "Market scan — $16k–$28k, everything",
+    priceMin: 16000,
     priceMax: 28000,
-    yearMin: 2016,
-    yearMax: 2024,
-    mileageMin: 25000,
-    mileageMax: 130000,
-    cleanTitleOnly: true,
   },
-  {
-    name: "Mechanic specials & branded titles — $2k–$12k, all makes",
-    makes: [] as string[],
-    models: [] as string[],
-    priceMin: 2000,
-    priceMax: 12000,
-    yearMin: 2012,
-    yearMax: 2024,
-    mileageMin: 0,
-    mileageMax: 200000,
-    cleanTitleOnly: false,
-  },
+].map((band) => ({
+  ...band,
+  makes: [] as string[],
+  models: [] as string[],
+  yearMin: 2000,
+  yearMax: 2027,
+  mileageMin: 0,
+  mileageMax: 400000,
+  cleanTitleOnly: false,
+}));
+
+// names of previously-seeded strategies that the current seed supersedes
+const SUPERSEDED_SEED_NAMES = [
+  "Arbitrage scan — $2k–$12k, all makes",
+  "Arbitrage scan — $12k–$28k, all makes",
+  "Mechanic specials & branded titles — $2k–$12k, all makes",
 ];
 
 /**
@@ -149,8 +147,8 @@ export const run = internalMutation({
     const byName = new Map(existing.map((s) => [s.name, s]));
 
     let deactivatedLegacy = 0;
-    for (const box of BUY_BOX) {
-      const row = byName.get(box.name);
+    for (const name of [...BUY_BOX.map((b) => b.name), ...SUPERSEDED_SEED_NAMES]) {
+      const row = byName.get(name);
       if (row?.active) {
         await ctx.db.patch(row._id, { active: false });
         deactivatedLegacy++;

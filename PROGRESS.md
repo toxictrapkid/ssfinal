@@ -10,7 +10,7 @@ STATUS: IN_PROGRESS
 - [x] M2 — parse.py + fixture tests green ✅ (cycle 3, 2026-06-12)
 - [x] M3 — ksl.py emits normalized JSON (FB deferred stub per override) ✅ (cycle 4, 2026-06-12)
 - [x] M4 — /ingest + upsert/dedupe/price-history working ✅ (cycle 5, 2026-06-12)
-- [ ] M5 — scoring engine: §4 formula + MarketCheck MCP comps + 0.70 salvage rule + partsCosts recon
+- [x] M5 — scoring engine: §4 formula + MarketCheck MCP comps + 0.70 salvage rule + partsCosts recon ✅ (cycle 6, 2026-06-12)
 - [ ] M6 — Daytona runner + crons firing on schedule
 - [ ] M7 — dashboard (feed, builder, pipeline, settings, drawer)
 - [ ] M8 — alerts (Resend/Twilio) with dedupe
@@ -37,6 +37,19 @@ STATUS: IN_PROGRESS
   The legacy 7 YMM searches are deactivated, not deleted (re-enable any in the Search Builder).
   Honest limit: with no MarketCheck REST key, HOT alerts fire only for comp-cached YMM+buckets
   (operator/MCP-seeded); everything else values via the flagged curve (amber, never hot).
+
+- **2026-06-12 — SURFACE EVERYTHING; NEVER PRE-FILTER A DEAL AWAY.** User (three messages):
+  "every mechanic special I will manually review please provide it to me and also any other
+  deals dont over think it — we are here to get deals not turn them away" / "I will never see
+  a deal if you filter it out before and I never see it" / "build the entire UI and UX as
+  needed to make this an easy to use and friendly tool". Implemented as:
+  (a) seeds are now 3 price-band-only market scans ($2k–8k / $8k–16k / $16k–28k), all makes,
+  all titles, all years, all mileages — title/mileage/year are ranking signals, never gates;
+  (b) `mechanicSpecial` flag computed at scoring; specials ALERT regardless of computed
+  profit (reason "mechanic_special") with the same once-per-car dedupe, and are never hidden
+  by recon math — the human rules, the math informs; (c) the only remaining hard filter is
+  private-party-only (user's own RULES #4); (d) M7 builds the complete UI with
+  show-everything defaults and a Mechanic Specials view.
 
 ## Reference-code reuse map
 <!-- Cycle 1 fills this: file → what we take from it -->
@@ -91,7 +104,22 @@ STATUS: IN_PROGRESS
 
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
-CYCLE 6 — M5 (Architect plan): the §4 scoring engine + MarketCheck-first comps + parts recon.
+CYCLE 7 — M6 (Architect plan): Daytona runner + crons.
+Files: convex/lib/sandboxDriver.ts (driver interface + DaytonaDriver via REST API using
+DAYTONA_API_KEY env + LocalProcessDriver for in-container gate runs), convex/daytona.ts
+(runSearchInSandbox action: config → create → exec run.py → teardown in finally → markRun;
+concurrency cap 3), convex/crons.ts (per-minute due-search dispatch + daily markStale/comp
+refresh). NO-ADDITIONAL-ACCESS directive: app.daytona.io is proxy-blocked, so the gate runs
+on LocalProcessDriver (spawns scrapers/run.py locally against the dev backend with
+--items-file) — proving dispatch→scrape→ingest→lastRunAt→teardown end-to-end in-container;
+DaytonaDriver is code-complete for production. Failure isolation gate: one search with a
+bad config (unknown source) fails its own row (lastError) without blocking siblings.
+Gate: a due search fires → listings land via /ingest → lastRunAt updates → sandbox/process
+torn down; bad-config search isolated. Predicted failures: Convex action runtime cannot
+spawn processes ("use node" needed — Node actions support child_process? NO — Convex Node
+actions can't spawn child processes reliably... fallback: LocalProcessDriver implemented as
+an HTTP shim outside Convex, or gate via direct run.py invocation triggered by a tiny local
+dispatcher script that polls listDue). Resolve during EXECUTE.
 Files: convex/lib/scoreMath.ts (pure §4 formula + Step-5 numbers, vitest), convex/lib/
 reconRules.ts (pure keyword classifier + parts-math, vitest), convex/lib/depreciationCurve.ts
 (flagged fallback, vitest), convex/lib/marketcheck.ts (REST driver iff key set — none here),
@@ -171,6 +199,23 @@ extras.
   data-backed buy-box keys: 2019|GMC|Terrain|Engine → $2,639 (n=248); 2018|Ford|Edge|Engine →
   $3,420 (n=163). 1,226 keys seeded (570 Engine, 656 Transmission). Re-scraping car-part.com
   for the missing models is a possible future task for the human.
+
+## Comp-cache provenance (operator/MCP-seeded rows, 2026-06-12)
+All six comps rows were seeded from live MarketCheck MCP queries (sold-first), zip 84104,
+radius 100 (package cap):
+- 2021|Chevrolet|Traverse 60k-80k: past-90-days sold=true, miles 60–80k → n=10, median 22999
+- 2019|Mazda|CX-5 80k-100k: sold, miles 80–100k → n=11, median 18557
+- 2020|Volkswagen|Tiguan 60k-80k: sold, miles 60–80k → n=10, median 16672
+- 2019|Jeep|Wrangler Unlimited 80k-100k: sold, miles 80–100k → n=8, median 22360
+- 2016|Chevrolet|Equinox 120k-140k: sold, miles 120–140k → n=4, median 8242
+- 2017|GMC|Terrain 80k-100k: source **marketcheck_pooled** — sold returned 0 rows; pooled
+  active (n=2, miles 70–120k) + sold (n=2, year_range 2016–2017 same-gen widening) = n=4,
+  median 8890. Pooling + widening labeled on the row per M5 reviewer advisory D.
+HONESTY NOTE on title filtering: the MCP server prohibits its carfax/title fields as
+unreliable, so MCP-seeded comps CANNOT be hard-filtered to clean titles; they are dealer
+retail listings (overwhelmingly clean-titled in practice). The REST driver path (when a key
+exists) does send title_status=clean and is test-pinned. Documented trade-off of the
+no-additional-access directive.
 
 ## Failures log
 <!-- Verifier FAILs with reasons; what was tried -->

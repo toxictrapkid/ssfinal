@@ -88,6 +88,9 @@ export default defineSchema({
       })
     ),
     lastAlertPrice: v.optional(v.number()), // alert-dedupe anchor (re-alert only below this)
+    // standing user override 2026-06-12: drivetrain-issue listings are always
+    // surfaced for manual review ("we are here to get deals not turn them away")
+    mechanicSpecial: v.optional(v.boolean()),
   })
     .index("by_dedupeKey", ["dedupeKey"])
     .index("by_score", ["dealScore"])
@@ -127,6 +130,8 @@ export default defineSchema({
     channel: v.string(), // "email" | "sms" | "log" (keyless fallback channel)
     sentAt: v.number(),
     score: v.number(),
+    // "hot" (estProfit ≥ margin) | "mechanic_special" (manual-review override)
+    reason: v.optional(v.string()),
   }).index("by_listing", ["listingId"]),
 
   // Single-row app settings (spec §3)
