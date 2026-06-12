@@ -9,3 +9,4 @@ __pycache__/
 .venv/
 playwright-report/
 test-results/
+data/.partscosts_batches/

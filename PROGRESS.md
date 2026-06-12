@@ -5,7 +5,7 @@ STATUS: IN_PROGRESS
 
 ## Milestones
 
-- [ ] M0 — ARCHITECTURE.md written + Reviewer-approved
+- [x] M0 — ARCHITECTURE.md written + Reviewer-approved ✅ (cycle 1, 2026-06-12)
 - [ ] M1 — Convex schema pushed + settings/buy-box seeded
 - [ ] M2 — parse.py + fixture tests green
 - [ ] M3 — facebook.py + ksl.py emit normalized JSON
@@ -68,18 +68,43 @@ STATUS: IN_PROGRESS
 - Generated `data/carpart_prices.csv` (~6,963 rows, Grade-A <100k used engine/trans prices,
   2012–2023). **KEEP** as data provenance; not app runtime. CSV seeds `partsCosts` at M1.
 
+## Reviewer advisories carried forward (from M0 PASS — address at the noted milestone)
+- M2/M3: confirm KSL search API returns `description` (Car dataclass lacks it; recon keywords
+  need it; if absent, add per-listing detail fetch before M5).
+- M3: validate extended URL segments (mileageFrom, yearTo, sellerType/For+Sale+By+Owner) against
+  live KSL — not all are in the reference main_url grammar.
+- M2: pin down where distanceMiles is computed (spec §5: location → distance from zip in parse.py).
+- M4: relist rule — a "gone" listing that reappears flips back to "active" (VISION #5 tracks relists).
+- M4: document the gone/sold conflation (no spec trigger for "sold").
+
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
-CYCLE 1 — M0 (Architect): write ARCHITECTURE.md.
-Files: ARCHITECTURE.md only. Gate: independent Reviewer subagent approves vs spec §3–§8 +
-KSL-only override. Must cover: component diagram, folder layout, data flow scrape→ingest→score→
-feed→alert, API surface (Convex functions + POST /ingest), §3 schema + partsCosts additions,
-caching (comps 7-day, Convex reactive queries), MarketCheck-MCP valuation chain w/ flagged curve
-fallback, parts-based recon, Daytona runner, §5 dedupe key, reuse map. Predicted failures:
-reviewer flags missing §8 view-by-view coverage or unclear MCP-vs-prod boundary — cover both.
+CYCLE 2 — M1 (Architect plan): Convex init, schema push, seeds.
+Files: package.json, convex/schema.ts, convex/partsCosts.ts, convex/settingsFns.ts,
+convex/searches.ts (seed-adjacent CRUD minimum), convex/seed.ts, scripts/build_partscosts.mjs.
+Fits ARCHITECTURE §2 layout; schema = §3 verbatim + documented additions (§5 of ARCHITECTURE).
+Gate: `npx convex dev --once` succeeds (anonymous local deployment — no account access);
+seed run → query returns 7 active §2 searches + settings row (margin 1500, fees 400);
+partsCosts lookup "2019|Chevrolet|Traverse|Engine" returns a median price.
+Predicted failures: convex CLI needs interactive login (use CONVEX_AGENT_MODE=anonymous /
+--local); CSV aggregation memory fine (~7k rows); seed payload size — batch at 500 rows.
 
 ## Cycle log
 <!-- One entry per cycle: date, milestone, PASS/FAIL, one-line summary -->
+- 2026-06-12 C1 M0 PASS — ARCHITECTURE.md approved by independent reviewer (verdict PASS, 16
+  numbered confirmations, 7 advisory notes logged above). KSL envelope verified against hax.py.
+
+## Data limitations (documented, not failures)
+- 2026-06-12 — `data/carpart_prices.csv` has ZERO price observations for 31 of 98 scraped
+  models (all Chevrolet SUVs/trucks incl. **Traverse**, GM trucks, Honda CR-V/HR-V, all Mazda
+  CX models + Mazda3/6, Ford F-series, Nissan Maxima, Toyota 4Runner — car-part.com returned
+  no Grade-A listings for those in the scrape run; see carpart_scraper.py VEHICLES list).
+  Consequence: M1's example lookup `2019|Chevrolet|Traverse|Engine` returns null BY DESIGN —
+  empty rows are not seeded, and recon for those YMMs uses §4 keyword bumps flagged
+  `reconSource:"keyword"` per LOOP_PROMPT recon rule 4. Lookup mechanism proven with
+  data-backed buy-box keys: 2019|GMC|Terrain|Engine → $2,639 (n=248); 2018|Ford|Edge|Engine →
+  $3,420 (n=163). 1,226 keys seeded (570 Engine, 656 Transmission). Re-scraping car-part.com
+  for the missing models is a possible future task for the human.
 
 ## Failures log
 <!-- Verifier FAILs with reasons; what was tried -->
