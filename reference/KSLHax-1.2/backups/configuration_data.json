@@ -1,0 +1,6 @@
+{
+    "url":"https://cars.ksl.com/search/make/Acura;Ford;Honda;Mazda;Mitsubishi;Toyota;Volkswagen/model/TL;Fiesta;Focus;Fusion;Taurus;Accord;Civic;Fit;Mazda2;Mazda3;Mazda3+Hatchback;Mazda3+Sedan;Mazda6;Eclipse;Eclipse+Spyder;Lancer;Camry;Celica;Corolla;Echo;Yaris;Yaris+Hatchback;Golf/mileageTo/160000/priceTo/5000/zip/84123/miles/25/priceFrom/2000/titleType/Clean+Title/yearFrom/1995",
+    "score_script_location":"scoring/default_scoring.py",
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
+    "page_count": 5
+}
