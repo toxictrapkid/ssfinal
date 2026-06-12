@@ -134,3 +134,10 @@ drift since KSLHax-1.2 (check response shape), description field absent in searc
   + img.ksl.com to the Claude Code environment's network allowlist. M3 gate satisfied via
   fixture-passthrough through the identical request/normalize/emit code path. M0-advisory A2
   (does the live search payload include `description`?) also moves to the first live run.
+- 2026-06-12 (non-halting, affects M6 live gate): app.daytona.io is ALSO blocked by the
+  egress proxy (probed: "Host not in allowlist"). M6 will be built against the Daytona SDK
+  behind a sandbox-driver interface and gated with a scripted fake driver, same pattern the
+  M3 reviewer ruled on. Live sandbox validation needs the human to allowlist app.daytona.io
+  (and Daytona sandbox/toolbox hosts) in the environment's network egress settings.
+  RECOMMENDED ALLOWLIST ADDITIONS (one human action unblocks everything live):
+  cars.ksl.com, img.ksl.com, app.daytona.io.
