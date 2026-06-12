@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CarHunter normalized listing (spec §5 shape + documented extras)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source", "sourceListingId", "url", "title", "price", "mileage", "year",
+    "make", "model", "trim", "vin", "titleStatus", "sellerType", "location",
+    "photoUrl", "photos", "description", "zip", "postedAt", "distanceMiles"
+  ],
+  "properties": {
+    "source": { "enum": ["ksl", "facebook"] },
+    "sourceListingId": { "type": "string", "minLength": 1 },
+    "url": { "type": "string", "pattern": "^https://" },
+    "title": { "type": "string", "minLength": 1 },
+    "price": { "type": "integer", "minimum": 1 },
+    "mileage": { "type": ["integer", "null"], "minimum": 1 },
+    "year": { "type": ["integer", "null"], "minimum": 1950, "maximum": 2049 },
+    "make": { "type": ["string", "null"] },
+    "model": { "type": ["string", "null"] },
+    "trim": { "type": ["string", "null"] },
+    "vin": { "type": ["string", "null"], "minLength": 11 },
+    "titleStatus": { "enum": ["clean", "salvage", "rebuilt", "unknown"] },
+    "sellerType": { "const": "private" },
+    "location": { "type": ["string", "null"] },
+    "photoUrl": { "type": ["string", "null"], "pattern": "^https://" },
+    "photos": { "type": "array", "items": { "type": "string", "pattern": "^https://" } },
+    "description": { "type": ["string", "null"] },
+    "zip": { "type": ["string", "null"], "pattern": "^\\d{5}" },
+    "postedAt": { "type": ["integer", "null"], "minimum": 1000000000000 },
+    "distanceMiles": { "type": ["number", "null"], "minimum": 0 }
+  }
+}

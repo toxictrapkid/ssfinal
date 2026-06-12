@@ -1,0 +1,5 @@
+requests>=2.31
+zipcodes>=1.2
+jsonschema>=4.21
+pytest>=8.0
+playwright>=1.44  # FB re-enable; KSL path is requests-only (reference hax.py)
