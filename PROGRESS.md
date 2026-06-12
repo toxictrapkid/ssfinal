@@ -128,3 +128,9 @@ drift since KSLHax-1.2 (check response shape), description field absent in searc
 
 ## BLOCKED
 <!-- Things only the human can resolve (FB cookie expired, missing API key, spec ambiguity) -->
+- 2026-06-12 (non-halting, optional unblock): this build container's egress proxy blocks
+  cars.ksl.com ("Host not in allowlist" — proxy message, NOT KSL bot protection). Live KSL
+  calls therefore run only inside Daytona sandboxes (M6) or after the human adds cars.ksl.com
+  + img.ksl.com to the Claude Code environment's network allowlist. M3 gate satisfied via
+  fixture-passthrough through the identical request/normalize/emit code path. M0-advisory A2
+  (does the live search payload include `description`?) also moves to the first live run.
