@@ -14,7 +14,7 @@ STATUS: IN_PROGRESS
 - [x] M6 — Daytona runner + crons firing on schedule ✅ (cycle 7, 2026-06-12)
 - [x] M7 — dashboard (feed, builder, pipeline, settings, drawer) ✅ (cycle 8, 2026-06-12)
 - [x] M8 — alerts (Resend/Twilio) with dedupe ✅ (cycle 9, 2026-06-12)
-- [ ] M9 — polish, mobile pass, README
+- [x] M9 — polish, mobile pass, README ✅ (cycle 10, 2026-06-13)
 - [ ] FINAL — end-to-end gate in VISION.md
 
 ## Standing user overrides (in addition to RULES.md #3/#3a/#3b)
@@ -214,6 +214,21 @@ extras.
 
 ## Cycle log
 <!-- One entry per cycle: date, milestone, PASS/FAIL, one-line summary -->
+- 2026-06-13 C10 M9 PASS — polish/README/optimizer verified by independent reviewer. First
+  review FAILED (the no-rerender e2e used a MutationObserver — passed even with the DealCard
+  memo deleted, proving nothing). FIXED: dev-only per-card React render counter (stripped from
+  prod bundle) + test asserts only the affected card re-renders; re-review confirmed it FAILS
+  without the memo and PASSES with it. Lighthouse mobile perf 100 / a11y 100 / bp 96; README
+  has all §10 items; fresh-clone smoke green (66 vitest + 61 pytest + web build). No logic
+  touched. Advisory fixed: README CONVEX_DEPLOYMENT note.
+- 2026-06-13 FINAL end-to-end gate (VISION.md) — OBSERVED PASS (pre independent verify):
+  clearSearchRuns (schedule fires) → dispatch_local.py one tick (3 due, all ran, cron-
+  equivalent) → run.py scrape+normalize → POST /ingest (2 new) → scoring (comps→recon→
+  profit/score/hot→alert). Result in listings:feed: 2021 Traverse ask $16,500 vs
+  marketcheck_sold comp → est $23,565, profit +$6,265, score 71, HOT=True; 2017 Terrain
+  "needs engine" → parts recon, surfaced as mechanic special. Alerts: +2 (hot + mechanic_
+  special), channel log. All searches lastRunAt stamped. Zero human action after the schedule
+  fired.
 - 2026-06-12 C9 M8 PASS — alerts verified by independent reviewer with its OWN fresh hot
   listing through the full 5-step dedupe matrix (1 alert → same-price 0 → raise 0 → drop
   exactly 1 → rescoreAll 0); transports envelope-correct (Resend Bearer/JSON, Twilio
