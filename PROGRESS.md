@@ -104,7 +104,20 @@ STATUS: IN_PROGRESS
 
 ## Current cycle plan
 <!-- Overwritten each cycle: milestone, files to touch, gate command, predicted failures -->
-CYCLE 10 — M9 (Architect plan): polish + mobile/perf pass + README §10 + optimizer sweep.
+CYCLE 10 — M9 EXECUTED (awaiting reviewer): polish + mobile/perf pass + README + optimizer.
+Done: drawer focus trap; sr-only open affordance (kills nested-interactive + label-name
+mismatch); no-rerender proof (perf.spec.ts MutationObserver); contrast→AA; data-id selectors;
+feed cap indicator; README §10 (what-it-is, prereqs, fresh-clone setup, Daytona image build,
+self-host notes, usage, scoring formula, tests, layout, constraints w/ carried notes).
+GATES MET: Lighthouse mobile perf 99 / a11y 100 / best-practices 96 (contrast, label-name,
+tap-targets all PASS); 6 Playwright e2e green incl. no-rerender; README has all §10 items;
+fresh-clone smoke (git clone /tmp → npm install → 66 vitest + 61 pytest + web build clean).
+Optimizer notes: bundle 300KB / 88.6KB gz (single chunk, fine for MVP); board/alerts queries
+do per-row db.get joins (small tables — N rows, not N+1 over an index scan; documented, revisit
+w/ pagination if tables grow); DealCard memo compares all painted fields (M7-A4). Feed pagination
+(M7-A11) carried as a documented future item (cap indicator shipped).
+
+PREV CYCLE 10 plan — M9 (Architect plan): polish + mobile/perf pass + README §10 + optimizer sweep.
 Files: README.md (all §10 items + carried notes: Daytona key env-only, settings exposure,
 pipeline archive, alert at-least-once-on-keyed, KSL-only state, in-container dispatcher,
 snapshot build prerequisite); web: drawer focus trap (M7-A5), e2e data-id selectors (A8),
