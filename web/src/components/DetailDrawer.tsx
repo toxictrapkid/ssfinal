@@ -7,7 +7,7 @@
  * Usage: <DetailDrawer listingId={id} onClose={() => setDrawer(null)} />
  * Mobile: full-screen slide-up. Desktop: right side panel.
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -25,15 +25,47 @@ export function DetailDrawer({
   const settings = useQuery(api.settings.get);
   const setDecision = useMutation(api.listings.setDecision);
 
+  const panelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // focus management: move focus in on open, trap Tab inside the dialog,
+  // hand focus back to the opener on close (M7 reviewer A5)
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
+    panel?.querySelector<HTMLElement>("button")?.focus();
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !panel) return;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    panel?.addEventListener("keydown", trap);
+    return () => {
+      panel?.removeEventListener("keydown", trap);
+      opener?.focus();
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={onClose} role="dialog" aria-modal="true" aria-label="Listing detail">
       <div
+        ref={panelRef}
         data-testid="detail-drawer"
         className="flex h-full w-full max-w-xl flex-col overflow-y-auto bg-zinc-950 shadow-2xl"
         onClick={(e) => e.stopPropagation()}

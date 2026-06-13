@@ -43,15 +43,15 @@ test.describe("pipeline", () => {
     await page.goto("/");
     const card = page.getByTestId("deal-card").first();
     await expect(card).toBeVisible({ timeout: 15_000 });
-    const title = await card.getAttribute("data-title");
-    expect(title).toBeTruthy();
+    const id = await card.getAttribute("data-id");
+    expect(id).toBeTruthy();
 
     await card.getByTestId("pursue-btn").click();
     await page.getByTestId("tab-pipeline").click();
 
     const lead = page.getByTestId("column-lead");
     await expect(
-      lead.locator(`[data-testid="pipeline-card"][data-title="${title}"]`)
+      lead.locator(`[data-testid="pipeline-card"][data-id="${id}"]`)
     ).toBeVisible({ timeout: 15_000 });
   });
 
@@ -60,13 +60,13 @@ test.describe("pipeline", () => {
     // make sure something is in the pipeline
     const feedCard = page.getByTestId("deal-card").first();
     await expect(feedCard).toBeVisible({ timeout: 15_000 });
-    const title = await feedCard.getAttribute("data-title");
+    const id = await feedCard.getAttribute("data-id");
     await feedCard.getByTestId("pursue-btn").click();
 
     await page.getByTestId("tab-pipeline").click();
     const card = page
       .getByTestId("column-lead")
-      .locator(`[data-testid="pipeline-card"][data-title="${title}"]`);
+      .locator(`[data-testid="pipeline-card"][data-id="${id}"]`);
     await expect(card).toBeVisible({ timeout: 15_000 });
 
     // pointer-based drag: down on the card, move to the Contacted column in
@@ -92,7 +92,7 @@ test.describe("pipeline", () => {
     await expect(
       page
         .getByTestId("column-contacted")
-        .locator(`[data-testid="pipeline-card"][data-title="${title}"]`)
+        .locator(`[data-testid="pipeline-card"][data-id="${id}"]`)
     ).toBeVisible({ timeout: 15_000 });
 
     // persisted server-side, not just local state
@@ -101,19 +101,19 @@ test.describe("pipeline", () => {
     await expect(
       page
         .getByTestId("column-contacted")
-        .locator(`[data-testid="pipeline-card"][data-title="${title}"]`)
+        .locator(`[data-testid="pipeline-card"][data-id="${id}"]`)
     ).toBeVisible({ timeout: 15_000 });
 
     // put it back to Lead via the keyboard-accessible stage menu
     await page
       .getByTestId("column-contacted")
-      .locator(`[data-testid="pipeline-card"][data-title="${title}"]`)
+      .locator(`[data-testid="pipeline-card"][data-id="${id}"]`)
       .getByTestId("stage-select")
       .selectOption("lead");
     await expect(
       page
         .getByTestId("column-lead")
-        .locator(`[data-testid="pipeline-card"][data-title="${title}"]`)
+        .locator(`[data-testid="pipeline-card"][data-id="${id}"]`)
     ).toBeVisible({ timeout: 15_000 });
   });
 });

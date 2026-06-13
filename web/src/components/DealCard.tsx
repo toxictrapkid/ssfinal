@@ -44,19 +44,25 @@ function DealCardInner({ listing, onOpen }: { listing: Listing; onOpen: () => vo
   return (
     <article
       data-testid="deal-card"
+      data-id={listing._id}
       data-score={listing.dealScore ?? ""}
       data-title={listing.title}
       onClick={onOpen}
-      onKeyDown={(e) => {
-        // only when the card itself is focused — Enter on the nested
-        // decision buttons must not also open the drawer (M7 reviewer A1)
-        if (e.key === "Enter" && e.target === e.currentTarget) onOpen();
-      }}
-      tabIndex={0}
-      role="button"
-      aria-label={`Open ${listing.title}`}
-      className="flex cursor-pointer gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-3 outline-none transition hover:border-zinc-600 focus-visible:ring-2 focus-visible:ring-sky-500"
+      aria-label={`Deal: ${listing.title}`}
+      className="relative flex cursor-pointer gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-3 transition hover:border-zinc-600"
     >
+      {/* keyboard/SR users get an explicit open affordance rather than a
+          role=button wrapping the nested decision buttons (M7 reviewer A1 +
+          M9 label-name-mismatch) */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+        className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:rounded focus:bg-sky-600 focus:px-2 focus:py-1 focus:text-xs focus:text-white"
+      >
+        Open details for {listing.title}
+      </button>
       <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-lg bg-zinc-800">
         {/* emoji sits behind the img so a dead photo URL degrades to the
             placeholder instead of a blank box (M7 reviewer A7) */}

@@ -29,7 +29,7 @@ export default function App() {
           <h1 className="text-base font-extrabold tracking-tight">
             🎯 CarHunter
           </h1>
-          <span className="text-xs text-zinc-500">undervalued cars, found for you</span>
+          <span className="text-xs text-zinc-400">undervalued cars, found for you</span>
           <nav className="ml-auto hidden gap-1 sm:flex" aria-label="Sections">
             {TABS.map((t) => (
               <TabButton key={t.id} tab={t} active={tab === t.id} onClick={() => setTab(t.id)} />
@@ -61,7 +61,7 @@ export default function App() {
             onClick={() => setTab(t.id)}
             aria-current={tab === t.id ? "page" : undefined}
             className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold ${
-              tab === t.id ? "text-sky-400" : "text-zinc-500"
+              tab === t.id ? "text-sky-400" : "text-zinc-400"
             }`}
           >
             <span className="text-base leading-none">{t.icon}</span>

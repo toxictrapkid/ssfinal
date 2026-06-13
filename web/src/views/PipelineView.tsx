@@ -149,6 +149,7 @@ function PipelineCard({
   return (
     <div
       data-testid="pipeline-card"
+      data-id={row.listing._id}
       data-title={row.listing.title}
       onPointerDown={onPointerDown}
       className={`cursor-grab touch-none select-none rounded-lg border border-zinc-700 bg-zinc-900 p-2.5 ${isDragging ? "opacity-50 ring-2 ring-sky-500" : ""}`}

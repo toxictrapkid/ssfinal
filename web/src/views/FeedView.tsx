@@ -36,7 +36,7 @@ export function FeedView() {
     <div className="mx-auto max-w-2xl space-y-3 p-3">
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-bold">Deal feed</h2>
-        <span className="text-sm text-zinc-500">{feed ? `${feed.length} cars` : "…"}</span>
+        <span className="text-sm text-zinc-400">{feed ? `${feed.length} cars` : "…"}</span>
         <button
           onClick={() => setShowFilters((s) => !s)}
           aria-expanded={showFilters}
@@ -72,6 +72,12 @@ export function FeedView() {
           <SkeletonCard />
           <SkeletonCard />
         </div>
+      )}
+
+      {feed && feed.length >= 100 && (
+        <p className="text-center text-xs text-amber-400">
+          Showing the top {feed.length} by score — tighten a filter to dig deeper.
+        </p>
       )}
 
       {feed && feed.length === 0 && (
