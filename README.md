@@ -64,14 +64,16 @@ git clone <repo> carhunter && cd carhunter
 # 1. backend deps + Convex
 npm install
 npx convex dev            # provisions/links a deployment, pushes schema + functions
-                          # (writes CONVEX_URL into .env.local)
+                          # (Convex Cloud writes CONVEX_DEPLOYMENT + VITE_CONVEX_URL
+                          #  into .env.local; self-hosted uses CONVEX_SELF_HOSTED_URL)
 
 # 2. seed: settings (margin 1500, fees 400), the market scans, and ~1,226
 #    used-engine/transmission price keys from data/carpart_prices.csv
 npm run seed
 
 # 3. deployment env vars (Convex dashboard → Settings → Environment Variables,
-#    or `npx convex env set NAME value`)
+#    or `npx convex env set NAME value`). CONVEX_DEPLOYMENT is set for you by
+#    `npx convex dev` above; the rest you set:
 npx convex env set INGEST_SECRET "$(openssl rand -hex 24)"   # shared secret for /ingest
 npx convex env set INGEST_URL    "https://<your-deployment>.convex.site/ingest"
 npx convex env set DAYTONA_API_KEY "dtn_..."                 # production scraping

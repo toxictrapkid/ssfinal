@@ -26,6 +26,16 @@ export type Listing = Doc<"listings">;
 
 function DealCardInner({ listing, onOpen }: { listing: Listing; onOpen: () => void }) {
   const setDecision = useMutation(api.listings.setDecision);
+
+  // Dev-only render counter so e2e can prove the memo actually prevents
+  // re-renders of unaffected cards (a MutationObserver can't — identical
+  // output produces no DOM mutation). Stripped from the production bundle.
+  if (import.meta.env.DEV) {
+    const w = window as unknown as { __renderCounts?: Record<string, number> };
+    w.__renderCounts ??= {};
+    w.__renderCounts[listing._id] = (w.__renderCounts[listing._id] ?? 0) + 1;
+  }
+
   const profit = listing.estProfit;
   const profitColor =
     profit === undefined
