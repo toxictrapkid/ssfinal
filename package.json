@@ -4,6 +4,8 @@
   "description": "Self-running deal finder for undervalued private-party cars (KSL-first).",
   "private": true,
   "scripts": {
+    "dev": "cd web && npm install && npm run dev",
+    "build": "cd web && npm install && npm run build",
     "dev:convex": "convex dev",
     "push:convex": "convex dev --once",
     "seed": "convex run seed:run && bash scripts/seed_partscosts.sh",
