@@ -1,6 +1,6 @@
 # PROGRESS.md — Loop memory (append only)
 
-STATUS: IN_PROGRESS
+STATUS: SHIPPED
 <!-- The loop stops only when this line reads: STATUS: SHIPPED -->
 
 ## Milestones
@@ -15,7 +15,7 @@ STATUS: IN_PROGRESS
 - [x] M7 — dashboard (feed, builder, pipeline, settings, drawer) ✅ (cycle 8, 2026-06-12)
 - [x] M8 — alerts (Resend/Twilio) with dedupe ✅ (cycle 9, 2026-06-12)
 - [x] M9 — polish, mobile pass, README ✅ (cycle 10, 2026-06-13)
-- [ ] FINAL — end-to-end gate in VISION.md
+- [x] FINAL — end-to-end gate in VISION.md ✅ (2026-06-13, independently verified)
 
 ## Standing user overrides (in addition to RULES.md #3/#3a/#3b)
 
