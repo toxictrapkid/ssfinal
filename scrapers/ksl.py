@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from typing import Any
@@ -28,12 +29,20 @@ from parse import normalize_ksl_batch
 
 log = logging.getLogger("carhunter.ksl")
 
-PROXY_URL = "https://cars.ksl.com/nextjs-api/proxy?"
+PROXY_URL = "https://cars.ksl.com/nextjs-api/proxy?"  # KSL's own API path (their naming)
 API_ENDPOINT = "/classifieds/cars/search/searchByUrlParams"
 PER_PAGE = 24  # reference value — KSL's own page size
 MAX_RETRIES = 3
 BACKOFF_SECONDS = (2, 4)  # waits between the 3 attempts
 DEFAULT_MAX_PAGES = 5  # matches requestAllCars' signature default (GUI passes its own)
+
+# Optional outbound proxy to get past KSL bot protection (e.g. Bright Data Web
+# Unlocker). Set KSL_PROXY_URL to the proxy endpoint — e.g.
+#   http://brd-customer-<id>-zone-<zone>:<password>@brd.superproxy.io:33335
+# and the request routes through it unchanged. KSL_PROXY_INSECURE=1 skips TLS
+# verification (some unlocker zones present their own certificate).
+OUTBOUND_PROXY = os.environ.get("KSL_PROXY_URL") or None
+PROXY_TLS_VERIFY = os.environ.get("KSL_PROXY_INSECURE", "").lower() not in ("1", "true", "yes")
 
 
 class KslApiError(RuntimeError):
@@ -109,12 +118,16 @@ def _request_page(
         "Origin": "https://cars.ksl.com",
     }
 
+    request_kwargs: dict[str, Any] = {"headers": headers, "json": payload, "timeout": 30}
+    if OUTBOUND_PROXY:
+        # route through Bright Data (or any) proxy to bypass bot protection
+        request_kwargs["proxies"] = {"http": OUTBOUND_PROXY, "https": OUTBOUND_PROXY}
+        request_kwargs["verify"] = PROXY_TLS_VERIFY
+
     last_error: Exception | None = None
     for attempt in range(MAX_RETRIES):
         try:
-            response = session.post(
-                PROXY_URL, headers=headers, json=payload, timeout=30
-            )
+            response = session.post(PROXY_URL, **request_kwargs)
             if response.status_code != 200:
                 raise KslApiError(
                     f"KSL API returned {response.status_code}: {response.text[:200]}"
