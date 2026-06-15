@@ -21,10 +21,10 @@ import { fetchKslListings, brightDataConfigured, type KslSearchConfig } from "./
 import { carblyLookup, applyGapRule, carblyConfigured, assignToFolder, BRANDED_FACTOR } from "./lib/carblyClient";
 import { dedupeKeyFor } from "./lib/dedupe";
 
-// Throttle: Carbly locks the session under bulk automation, so keep each tick
-// small and pace the lookups. The cron trickles only NEW listings; never bulk.
-const MAX_ENRICH_PER_SWEEP = 8; // gentle per-tick cap
-const CARBLY_DELAY_MS = 400; // pause between Carbly lookups
+// Carbly's limit is one ACTIVE DEVICE at a time (not call volume), so normal
+// throughput is fine — just don't run it while you're using Carbly yourself.
+const MAX_ENRICH_PER_SWEEP = 20; // per-cell cap (cells are small after mileage×price slicing)
+const CARBLY_DELAY_MS = 150; // light pacing between Carbly lookups
 const CURRENT_YEAR = new Date().getFullYear();
 
 const BASE_CONFIG: KslSearchConfig = {
