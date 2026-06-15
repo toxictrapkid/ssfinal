@@ -67,6 +67,8 @@ interface SweepResult {
   enriched: number;
   qualified: number;
   hot: number;
+  /** Set when Carbly's daily add/rate limit was hit — the sweep stopped early to back off. */
+  limited?: boolean;
   error?: string;
 }
 
@@ -99,10 +101,12 @@ async function scanOne(
   const deals: any[] = [];
   let enriched = 0;
   let hot = 0;
+  let limited = false;
   for (const l of toEnrich) {
     if (enriched > 0) await new Promise((r) => setTimeout(r, CARBLY_DELAY_MS)); // pace Carbly
     const val = await carblyLookup(l.vin!, l.mileage, session);
-    enriched++;
+    if (val.limited) { limited = true; break; } // Carbly daily limit hit -> stop, don't hammer
+    enriched++; // count only real value pulls (not failed/limited lookups)
     if (val.jdCleanTrade == null && val.kbbLending == null) continue;
     const g = applyGapRule(l.price, val, { factor, branded: titleStatus === "branded" });
     if (!g.qualifies) continue;
@@ -137,7 +141,7 @@ async function scanOne(
     });
   }
   if (deals.length) await ctx.runMutation(internal.listings.dealUpsert, { deals, notify });
-  return { scraped: listings.length, enriched, qualified: deals.length, hot };
+  return { scraped: listings.length, enriched, qualified: deals.length, hot, limited };
 }
 
 /** Sweep one grid cell: clean-title (full books) + branded-title (70% books). */
@@ -166,16 +170,20 @@ async function scanBand(
   };
   const clean = await scanOne(ctx, { ...cell, titleType: CLEAN_TITLE }, 1.0, "clean", notify, session);
   let branded: SweepResult = { scraped: 0, enriched: 0, qualified: 0, hot: 0 };
-  try {
-    branded = await scanOne(ctx, { ...cell, titleType: BRANDED_TITLE }, BRANDED_FACTOR, "branded", notify, session);
-  } catch (e) {
-    branded.error = String(e).slice(0, 120);
+  // If the clean pass already hit Carbly's limit, don't bother with the branded pass.
+  if (!clean.limited) {
+    try {
+      branded = await scanOne(ctx, { ...cell, titleType: BRANDED_TITLE }, BRANDED_FACTOR, "branded", notify, session);
+    } catch (e) {
+      branded.error = String(e).slice(0, 120);
+    }
   }
   return {
     scraped: clean.scraped + branded.scraped,
     enriched: clean.enriched + branded.enriched,
     qualified: clean.qualified + branded.qualified,
     hot: clean.hot + branded.hot,
+    limited: clean.limited || branded.limited,
     error: clean.error ?? branded.error,
   };
 }
@@ -192,7 +200,8 @@ export const runScan = internalAction({
     }
     const cell = GRID[Math.floor(Date.now() / 120000) % GRID.length];
     const res = await scanBand(ctx, cell.pmin, cell.pmax, cell.mmin, cell.mmax, true, cell.yearMin, cell.yearMax);
-    console.log(`autoScan ${cell.yearMin}${cell.yearMax ? "-" + cell.yearMax : "+"} $${cell.pmin}-${cell.pmax} / ${cell.mmin}-${cell.mmax}mi:`, JSON.stringify(res));
+    const tag = res.limited ? " [CARBLY LIMIT REACHED — backing off]" : "";
+    console.log(`autoScan ${cell.yearMin}${cell.yearMax ? "-" + cell.yearMax : "+"} $${cell.pmin}-${cell.pmax} / ${cell.mmin}-${cell.mmax}mi:${tag}`, JSON.stringify(res));
     return res;
   },
 });
@@ -205,11 +214,13 @@ export const backfillFolder = action({
     if (!session) return { total: 0, filed: 0, error: "Carbly login failed" };
     const rows: { vin: string; mileage: number | null }[] = await ctx.runQuery(internal.listings.activeWithVin, {});
     let filed = 0;
+    let limited = false;
     for (const r of rows) {
       const val = await carblyLookup(r.vin, r.mileage, session);
+      if (val.limited) { limited = true; break; } // Carbly daily limit -> stop
       if (val.uuid && (await assignToFolder(val.uuid, session))) filed++;
     }
-    return { total: rows.length, filed };
+    return { total: rows.length, filed, limited };
   },
 });
 

@@ -31,6 +31,8 @@ export interface CarblyValuation {
   jdCleanTrade: number | null;
   kbbLending: number | null;
   uuid: string | null;
+  /** True when Carbly rejected the lookup with its daily add/rate limit ("Limit Reached"). */
+  limited?: boolean;
 }
 
 function sessionHeaders(s: CarblySession): Record<string, string> {
@@ -110,7 +112,15 @@ export async function carblyLookup(
       headers: sessionHeaders(session),
       body: JSON.stringify(body),
     });
-    if (!post.ok) return empty;
+    if (!post.ok) {
+      // Carbly's daily add/rate limit returns 422 {"errors":["Limit Reached"]}.
+      // Signal it so the scan backs off instead of hammering a wall every tick.
+      if (post.status === 422) {
+        const txt = await post.text().catch(() => "");
+        if (txt.includes("Limit Reached")) return { ...empty, limited: true };
+      }
+      return empty;
+    }
     const created = (await post.json()) as Record<string, unknown>;
     const cdata = (created.data ?? created) as Record<string, unknown>;
     const uuid = typeof cdata.uuid === "string" ? cdata.uuid : null;
