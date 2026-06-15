@@ -3,27 +3,17 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Every minute: dispatch due searches into sandboxes (spec §6). Each search
-// runs as its own scheduled action — failure isolation by construction.
-crons.interval(
-  "dispatch due searches",
-  { minutes: 1 },
-  internal.daytona.dispatchDueSearches,
-  {}
-);
+// Every 2 minutes: scan KSL for new listings, enrich each by VIN with Carbly
+// (JD clean trade-in + KBB lending, mileage-adjusted), and keep the ones that
+// are >= $1,000 under either book (HOT when under both). Runs entirely
+// server-side in Convex — 24/7, no sandbox/Daytona/local machine.
+crons.interval("auto deal scan", { minutes: 2 }, internal.autoScan.runScan, {});
 
-// Daily: mark listings unseen for 48h as gone (spec §6), then rescore the
-// survivors so freshness decay and any refreshed comps re-rank the feed.
+// Daily: mark listings unseen for 48h as gone (spec §6) so the feed stays live.
 crons.daily(
-  "stale sweep + rescore",
+  "stale sweep",
   { hourUTC: 9, minuteUTC: 0 }, // 3am MT — before the morning lot check
   internal.listings.markStale,
-  {}
-);
-crons.daily(
-  "daily rescore",
-  { hourUTC: 9, minuteUTC: 10 },
-  internal.scoring.rescoreAll,
   {}
 );
 

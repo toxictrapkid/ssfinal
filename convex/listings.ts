@@ -1,5 +1,5 @@
 import { internal } from "./_generated/api";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { dedupeKeyFor } from "./lib/dedupe";
 import { normalizedListing } from "./lib/listingValidator";
@@ -307,5 +307,148 @@ export const stats = query({
     const byStatus: Record<string, number> = {};
     for (const l of all) byStatus[l.status] = (byStatus[l.status] ?? 0) + 1;
     return { total: all.length, byStatus };
+  },
+});
+
+// ---------------------------------------------------------------- auto-scan
+// Lookup which dedupeKeys already exist (so the scan only Carbly-enriches new
+// or price-changed listings — bounds cost + action time).
+export const existingByDedupeKeys = internalQuery({
+  args: { keys: v.array(v.string()) },
+  handler: async (ctx, { keys }) => {
+    const out: Record<string, { price: number; checked: boolean }> = {};
+    for (const key of keys) {
+      const row = await ctx.db
+        .query("listings")
+        .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", key))
+        .first();
+      if (row) out[key] = { price: row.price, checked: row.carblyCheckedAt != null };
+    }
+    return out;
+  },
+});
+
+const carblyDeal = v.object({
+  source: v.string(),
+  sourceListingId: v.string(),
+  url: v.string(),
+  title: v.string(),
+  year: v.union(v.number(), v.null()),
+  make: v.union(v.string(), v.null()),
+  model: v.union(v.string(), v.null()),
+  trim: v.union(v.string(), v.null()),
+  vin: v.union(v.string(), v.null()),
+  mileage: v.union(v.number(), v.null()),
+  price: v.number(),
+  titleStatus: v.string(),
+  location: v.union(v.string(), v.null()),
+  zip: v.union(v.string(), v.null()),
+  photoUrl: v.union(v.string(), v.null()),
+  photos: v.array(v.string()),
+  postedAt: v.union(v.number(), v.null()),
+  // carbly gap-rule output
+  jdCleanTrade: v.union(v.number(), v.null()),
+  kbbLending: v.union(v.number(), v.null()),
+  jdGap: v.union(v.number(), v.null()),
+  kbbGap: v.union(v.number(), v.null()),
+  estValue: v.union(v.number(), v.null()),
+  estProfit: v.number(),
+  dealScore: v.number(),
+  hot: v.boolean(),
+});
+
+// Upsert Carbly-qualified deals. No curve scoring — values come straight from
+// the gap rule (price vs JD clean trade / KBB lending).
+export const dealUpsert = internalMutation({
+  args: { searchId: v.optional(v.id("searches")), deals: v.array(carblyDeal) },
+  handler: async (ctx, { searchId, deals }) => {
+    const now = Date.now();
+    const result = { inserted: 0, updated: 0, priceDrops: 0, hot: 0 };
+    for (const d of deals) {
+      const dedupeKey = dedupeKeyFor({
+        vin: d.vin,
+        year: d.year,
+        make: d.make,
+        model: d.model,
+        mileage: d.mileage,
+        zip: d.zip,
+        source: d.source,
+        sourceListingId: d.sourceListingId,
+      });
+      const scoring = {
+        estValue: d.estValue ?? undefined,
+        estProfit: d.estProfit,
+        dealScore: d.dealScore,
+        hot: d.hot,
+        carblyJdCleanTrade: d.jdCleanTrade ?? undefined,
+        carblyKbbLending: d.kbbLending ?? undefined,
+        carblyJdGap: d.jdGap ?? undefined,
+        carblyKbbGap: d.kbbGap ?? undefined,
+        carblyCheckedAt: now,
+        valuationSource: "carbly",
+      };
+      const existing = await ctx.db
+        .query("listings")
+        .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", dedupeKey))
+        .first();
+      if (!existing) {
+        await ctx.db.insert("listings", {
+          dedupeKey,
+          source: d.source,
+          sourceListingId: d.sourceListingId,
+          url: d.url,
+          title: d.title,
+          year: d.year ?? undefined,
+          make: d.make ?? undefined,
+          model: d.model ?? undefined,
+          trim: d.trim ?? undefined,
+          vin: d.vin ?? undefined,
+          mileage: d.mileage ?? undefined,
+          price: d.price,
+          titleStatus: d.titleStatus,
+          location: d.location ?? undefined,
+          sellerType: "private",
+          photoUrl: d.photoUrl ?? undefined,
+          photos: d.photos,
+          firstSeenAt: now,
+          lastSeenAt: now,
+          daysListed: daysListedFor(now, d.postedAt, now),
+          priceHistory: [{ price: d.price, at: now }],
+          status: "active",
+          decision: "new",
+          matchedSearchId: searchId,
+          ...scoring,
+        });
+        result.inserted++;
+        if (d.hot) result.hot++;
+        continue;
+      }
+      const priceChanged = d.price !== existing.price;
+      const priceDropped = d.price < existing.price;
+      const patch: Record<string, unknown> = {
+        lastSeenAt: now,
+        daysListed: daysListedFor(now, d.postedAt, existing.firstSeenAt),
+        sourceListingId: d.sourceListingId,
+        url: d.url,
+        title: d.title,
+        titleStatus: d.titleStatus,
+        photoUrl: d.photoUrl ?? existing.photoUrl,
+        photos: d.photos.length ? d.photos : existing.photos,
+        status: existing.status === "gone" || existing.status === "sold" ? "active" : existing.status,
+        ...scoring,
+      };
+      if (priceChanged) {
+        patch.price = d.price;
+        patch.priceHistory = [...existing.priceHistory, { price: d.price, at: now }];
+        if (priceDropped) {
+          patch.status = "price_drop";
+          result.priceDrops++;
+        }
+      }
+      await ctx.db.patch(existing._id, patch);
+      result.updated++;
+      if (d.hot) result.hot++;
+    }
+    return result;
   },
 });

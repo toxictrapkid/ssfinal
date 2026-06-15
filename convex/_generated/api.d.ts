@@ -9,15 +9,18 @@
  */
 
 import type * as alerts from "../alerts.js";
+import type * as autoScan from "../autoScan.js";
 import type * as comps from "../comps.js";
 import type * as crons from "../crons.js";
 import type * as daytona from "../daytona.js";
 import type * as debug from "../debug.js";
 import type * as http from "../http.js";
 import type * as lib_alertTransports from "../lib/alertTransports.js";
+import type * as lib_carblyClient from "../lib/carblyClient.js";
 import type * as lib_daytonaClient from "../lib/daytonaClient.js";
 import type * as lib_dedupe from "../lib/dedupe.js";
 import type * as lib_depreciationCurve from "../lib/depreciationCurve.js";
+import type * as lib_kslWebUnlocker from "../lib/kslWebUnlocker.js";
 import type * as lib_listingValidator from "../lib/listingValidator.js";
 import type * as lib_marketcheck from "../lib/marketcheck.js";
 import type * as lib_reconRules from "../lib/reconRules.js";
@@ -38,15 +41,18 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   alerts: typeof alerts;
+  autoScan: typeof autoScan;
   comps: typeof comps;
   crons: typeof crons;
   daytona: typeof daytona;
   debug: typeof debug;
   http: typeof http;
   "lib/alertTransports": typeof lib_alertTransports;
+  "lib/carblyClient": typeof lib_carblyClient;
   "lib/daytonaClient": typeof lib_daytonaClient;
   "lib/dedupe": typeof lib_dedupe;
   "lib/depreciationCurve": typeof lib_depreciationCurve;
+  "lib/kslWebUnlocker": typeof lib_kslWebUnlocker;
   "lib/listingValidator": typeof lib_listingValidator;
   "lib/marketcheck": typeof lib_marketcheck;
   "lib/reconRules": typeof lib_reconRules;

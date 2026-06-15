@@ -27,6 +27,7 @@ const titleBadge = (s?: string) => {
   const k = s.toLowerCase();
   if (k === "salvage") return "Salvage title";
   if (k === "rebuilt") return "Rebuilt title";
+  if (k === "branded") return "Branded title";
   return null;
 };
 const scoreColor = (score?: number) => {

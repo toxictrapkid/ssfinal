@@ -80,3 +80,13 @@ export const setListingLastSeen = internalMutation({
     return { id: listing._id, lastSeenAt };
   },
 });
+
+/** Ops: delete every listing (fresh start before a Carbly wide-sweep). */
+export const clearAllListings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("listings").collect();
+    for (const l of all) await ctx.db.delete(l._id);
+    return { deleted: all.length };
+  },
+});

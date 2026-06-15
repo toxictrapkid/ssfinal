@@ -94,6 +94,15 @@ export default defineSchema({
     // standing user override 2026-06-12: drivetrain-issue listings are always
     // surfaced for manual review ("we are here to get deals not turn them away")
     mechanicSpecial: v.optional(v.boolean()),
+    // Carbly book-value enrichment (per-VIN, mileage-adjusted) + gap-rule output.
+    // A listing qualifies for the feed when price is >= $1,000 under JD clean
+    // trade-in OR KBB lending; HOT when under both. (user rule 2026-06-15)
+    carblyJdCleanTrade: v.optional(v.number()),
+    carblyKbbLending: v.optional(v.number()),
+    carblyJdGap: v.optional(v.number()), // jdCleanTrade - price
+    carblyKbbGap: v.optional(v.number()), // kbbLending - price
+    carblyCheckedAt: v.optional(v.number()),
+    valuationSource: v.optional(v.string()), // "carbly" | "curve" | ...
   })
     .index("by_dedupeKey", ["dedupeKey"])
     .index("by_score", ["dealScore"])
