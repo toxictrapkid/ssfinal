@@ -99,7 +99,7 @@ async function scanOne(
     const val = await carblyLookup(l.vin!, l.mileage);
     enriched++;
     if (val.jdCleanTrade == null && val.kbbLending == null) continue;
-    const g = applyGapRule(l.price, val, factor);
+    const g = applyGapRule(l.price, val, { factor, branded: titleStatus === "branded" });
     if (!g.qualifies) continue;
     if (g.hot) hot++;
     deals.push({

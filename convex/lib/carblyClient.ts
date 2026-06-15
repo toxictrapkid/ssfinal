@@ -111,25 +111,43 @@ export interface GapResult {
 }
 
 // Buy-box thresholds (user rule 2026-06-15):
-//   qualify: price <= max(adjusted books) + $500  (in range of the books, or up to $500 over either)
-//   HOT:     price is way below BOTH adjusted books (>= HOT_UNDER under each)
-//   branded title (salvage/rebuilt): books discounted to 70%
-export const QUALIFY_ABOVE = 500;
-export const HOT_UNDER = 1500;
+//   QUALIFY (review list): price <= reference book + $750 (within $750 over, or anything below)
+//   CONTACT NOW (hot):     price >= $1,000 under the reference book(s)
+//   clean title  -> reference = the HIGHER of JD clean trade / KBB lending; contact-now needs under BOTH
+//   branded/salvage -> books discounted to 70% and the decision FOCUSES on JD clean trade
+export const QUALIFY_ABOVE = 750;
+export const CONTACT_NOW_UNDER = 1000;
 export const BRANDED_FACTOR = 0.7;
 
-/** factor: 1.0 for clean title, 0.7 for salvage/rebuilt. */
-export function applyGapRule(price: number, val: CarblyValuation, factor = 1.0): GapResult {
+/** factor: 1.0 clean / 0.7 branded. branded => decide on JD trade (70%). */
+export function applyGapRule(
+  price: number,
+  val: CarblyValuation,
+  opts: { factor?: number; branded?: boolean } = {}
+): GapResult {
+  const factor = opts.factor ?? 1.0;
+  const branded = opts.branded ?? factor < 1.0;
   const effJd = val.jdCleanTrade != null ? Math.round(val.jdCleanTrade * factor) : null;
   const effKbb = val.kbbLending != null ? Math.round(val.kbbLending * factor) : null;
   const jdGap = effJd != null ? effJd - price : null;
   const kbbGap = effKbb != null ? effKbb - price : null;
-  const books = [effJd, effKbb].filter((b): b is number => b != null);
-  const estValue = books.length ? Math.max(...books) : null;
-  const bestGap = estValue != null ? estValue - price : -Infinity;
-  // qualify: within range of / up to $500 above the higher book
-  const qualifies = estValue != null && price <= estValue + QUALIFY_ABOVE;
-  // hot: way below BOTH books
-  const hot = jdGap != null && kbbGap != null && jdGap >= HOT_UNDER && kbbGap >= HOT_UNDER;
-  return { effJd, effKbb, jdGap, kbbGap, qualifies, hot, bestGap: Number.isFinite(bestGap) ? bestGap : 0, estValue };
+
+  let qualifies = false;
+  let hot = false;
+  let estValue: number | null = null;
+  if (branded) {
+    // focus on JD trade (70%); fall back to KBB (70%) only when JD is missing
+    const ref = effJd ?? effKbb;
+    const refGap = effJd != null ? jdGap : kbbGap;
+    estValue = ref;
+    qualifies = ref != null && price <= ref + QUALIFY_ABOVE;
+    hot = refGap != null && refGap >= CONTACT_NOW_UNDER;
+  } else {
+    const books = [effJd, effKbb].filter((b): b is number => b != null);
+    estValue = books.length ? Math.max(...books) : null;
+    qualifies = estValue != null && price <= estValue + QUALIFY_ABOVE;
+    hot = jdGap != null && kbbGap != null && jdGap >= CONTACT_NOW_UNDER && kbbGap >= CONTACT_NOW_UNDER;
+  }
+  const bestGap = estValue != null ? estValue - price : 0;
+  return { effJd, effKbb, jdGap, kbbGap, qualifies, hot, bestGap, estValue };
 }

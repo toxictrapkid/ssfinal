@@ -40,7 +40,7 @@ const scoreColor = (score?: number) => {
 /* deal badges from real CarHunter fields */
 function cardBadges(l: Listing): { cls: string; txt: string }[] {
   const b: { cls: string; txt: string }[] = [];
-  if (l.hot) b.push({ cls: "hot", txt: "🔥 HOT" });
+  if (l.hot) b.push({ cls: "hot", txt: "⚡ CONTACT NOW" });
   if (l.estProfit != null && l.estProfit > 0) b.push({ cls: "profit", txt: "+" + money(l.estProfit) });
   if (l.mechanicSpecial) b.push({ cls: "special", txt: "Mechanic special" });
   const tb = titleBadge(l.titleStatus);
@@ -124,7 +124,7 @@ function lsSet(k: string, v: unknown) {
 export default function App() {
   const listings = useQuery(api.listings.feed, { limit: 300 });
 
-  const [view, setView] = useState<"all" | "saved">("all");
+  const [view, setView] = useState<"all" | "contact" | "saved">("all");
   const [q, setQ] = useState("");
   const [make, setMake] = useState("");
   const [maxPrice, setMaxPrice] = useState<number | null>(null);
@@ -166,6 +166,7 @@ export default function App() {
 
   const filtered = useMemo(() => {
     let list = (listings ?? []).slice();
+    if (view === "contact") list = list.filter((l) => l.hot);
     if (view === "saved")
       list = list.filter((l) => saved.includes(l._id) || (notes[l._id] || "").trim() || status[l._id]);
     const term = q.trim().toLowerCase();
@@ -224,6 +225,9 @@ export default function App() {
           </div>
           <div className="seg" role="tablist">
             <button className={view === "all" ? "active" : ""} onClick={() => setView("all")}>All deals</button>
+            <button className={view === "contact" ? "active" : ""} onClick={() => setView("contact")}>
+              Contact Now <span className="pill">{(listings ?? []).filter((l) => l.hot).length}</span>
+            </button>
             <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}>
               Watchlist <span className="pill">{saved.length}</span>
             </button>
@@ -287,8 +291,8 @@ export default function App() {
         ) : filtered.length === 0 ? (
           <div className="empty">
             <div className="ic">{Ic.search}</div>
-            <h3>{view === "saved" ? "Your watchlist is empty" : "No matches"}</h3>
-            <p>{view === "saved" ? "Tap the heart on any car, or add a note, to track it here." : "Try widening your filters or clearing the search."}</p>
+            <h3>{view === "saved" ? "Your watchlist is empty" : view === "contact" ? "No Contact-Now deals yet" : "No matches"}</h3>
+            <p>{view === "saved" ? "Tap the heart on any car, or add a note, to track it here." : view === "contact" ? "Cars priced $1,000+ under both books land here automatically." : "Try widening your filters or clearing the search."}</p>
           </div>
         ) : (
           <div className="grid">
@@ -441,7 +445,7 @@ function Drawer({ l, saved, status, note, onClose, onSave, onCopy, onStatus, onN
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>{Ic.pin}{l.location || "—"}{l.distanceMiles != null ? ` · ${Math.round(l.distanceMiles)} mi away` : ""}</span>
           </div>
           <div className="d-badges">
-            {l.hot && <span className="d-bdg hot">🔥 HOT deal</span>}
+            {l.hot && <span className="d-bdg hot">⚡ Contact now</span>}
             {l.estProfit != null && <span className={"d-bdg profit" + (profitNeg ? " neg" : "")}>{(l.estProfit > 0 ? "+" : "") + money(l.estProfit)} est. profit</span>}
             {l.mechanicSpecial && <span className="d-bdg special">Mechanic special</span>}
             {tb && <span className="d-bdg title">{tb}</span>}
