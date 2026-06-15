@@ -122,7 +122,7 @@ function lsSet(k: string, v: unknown) {
 
 /* ============================ App ============================ */
 export default function App() {
-  const listings = useQuery(api.listings.feed, { limit: 300 });
+  const listings = useQuery(api.listings.feed, { limit: 300 }) as Listing[] | undefined;
 
   const [view, setView] = useState<"all" | "contact" | "saved">("all");
   const [q, setQ] = useState("");

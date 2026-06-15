@@ -42,6 +42,22 @@ export function carblyConfigured(): boolean {
   return !!(process.env.CARBLY_ACCESS_TOKEN && process.env.CARBLY_CLIENT && process.env.CARBLY_UID);
 }
 
+/** File a Carbly vehicle into the "KSL leads" folder (id from CARBLY_FOLDER_ID). */
+export async function assignToFolder(uuid: string): Promise<boolean> {
+  const fid = process.env.CARBLY_FOLDER_ID;
+  if (!fid || !uuid || !carblyConfigured()) return false;
+  try {
+    const r = await fetch(`${CARBLY_BASE}/v6/vehicles/${uuid}${SFX}`, {
+      method: "PATCH",
+      headers: headers(),
+      body: JSON.stringify({ vehicle_folder_id: Number(fid) }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Pull the mileage-adjusted (falling back to base) value out of an appraisal node. */
 function nodeValue(node: unknown): number | null {
   if (!node || typeof node !== "object") return null;

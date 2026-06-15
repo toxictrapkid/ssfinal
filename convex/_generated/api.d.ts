@@ -26,6 +26,7 @@ import type * as lib_marketcheck from "../lib/marketcheck.js";
 import type * as lib_reconRules from "../lib/reconRules.js";
 import type * as lib_scoreMath from "../lib/scoreMath.js";
 import type * as listings from "../listings.js";
+import type * as notifications from "../notifications.js";
 import type * as partsCosts from "../partsCosts.js";
 import type * as pipeline from "../pipeline.js";
 import type * as scoring from "../scoring.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   "lib/reconRules": typeof lib_reconRules;
   "lib/scoreMath": typeof lib_scoreMath;
   listings: typeof listings;
+  notifications: typeof notifications;
   partsCosts: typeof partsCosts;
   pipeline: typeof pipeline;
   scoring: typeof scoring;

@@ -18,7 +18,7 @@ import { internalAction, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { fetchKslListings, brightDataConfigured, type KslSearchConfig } from "./lib/kslWebUnlocker";
-import { carblyLookup, applyGapRule, carblyConfigured, BRANDED_FACTOR } from "./lib/carblyClient";
+import { carblyLookup, applyGapRule, carblyConfigured, assignToFolder, BRANDED_FACTOR } from "./lib/carblyClient";
 import { dedupeKeyFor } from "./lib/dedupe";
 
 const MAX_ENRICH_PER_SWEEP = 24; // bound Carbly calls + action time per sweep
@@ -72,7 +72,8 @@ async function scanOne(
   ctx: { runQuery: any; runMutation: any },
   cfg: KslSearchConfig,
   factor: number,
-  titleStatus: string
+  titleStatus: string,
+  notify: boolean
 ): Promise<SweepResult> {
   const listings = (await fetchKslListings(cfg)).filter((l) => l.vin);
   const keyByListing = new Map<string, (typeof listings)[number]>();
@@ -101,6 +102,7 @@ async function scanOne(
     if (val.jdCleanTrade == null && val.kbbLending == null) continue;
     const g = applyGapRule(l.price, val, { factor, branded: titleStatus === "branded" });
     if (!g.qualifies) continue;
+    if (val.uuid) await assignToFolder(val.uuid); // file every qualifier into "KSL leads"
     if (g.hot) hot++;
     deals.push({
       source: "ksl",
@@ -130,7 +132,7 @@ async function scanOne(
       hot: g.hot,
     });
   }
-  if (deals.length) await ctx.runMutation(internal.listings.dealUpsert, { deals });
+  if (deals.length) await ctx.runMutation(internal.listings.dealUpsert, { deals, notify });
   return { scraped: listings.length, enriched, qualified: deals.length, hot };
 }
 
@@ -140,15 +142,16 @@ async function scanBand(
   priceMin: number,
   priceMax: number,
   mileageMin = 0,
-  mileageMax = 110000
+  mileageMax = 110000,
+  notify = false
 ): Promise<SweepResult> {
   if (!brightDataConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "BRIGHTDATA_API_TOKEN not set" };
   if (!carblyConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "Carbly env not set" };
   const cell = { ...BASE_CONFIG, priceMin, priceMax, mileageMin, mileageMax };
-  const clean = await scanOne(ctx, { ...cell, titleType: CLEAN_TITLE }, 1.0, "clean");
+  const clean = await scanOne(ctx, { ...cell, titleType: CLEAN_TITLE }, 1.0, "clean", notify);
   let branded: SweepResult = { scraped: 0, enriched: 0, qualified: 0, hot: 0 };
   try {
-    branded = await scanOne(ctx, { ...cell, titleType: BRANDED_TITLE }, BRANDED_FACTOR, "branded");
+    branded = await scanOne(ctx, { ...cell, titleType: BRANDED_TITLE }, BRANDED_FACTOR, "branded", notify);
   } catch (e) {
     branded.error = String(e).slice(0, 120);
   }
@@ -166,9 +169,23 @@ export const runScan = internalAction({
   args: {},
   handler: async (ctx) => {
     const cell = GRID[Math.floor(Date.now() / 120000) % GRID.length];
-    const res = await scanBand(ctx, cell.pmin, cell.pmax, cell.mmin, cell.mmax);
+    const res = await scanBand(ctx, cell.pmin, cell.pmax, cell.mmin, cell.mmax, true); // notify on new deals
     console.log(`autoScan $${cell.pmin}-${cell.pmax} / ${cell.mmin}-${cell.mmax}mi:`, JSON.stringify(res));
     return res;
+  },
+});
+
+/** File every current qualifier into the Carbly "KSL leads" folder (one-time backfill). */
+export const backfillFolder = action({
+  args: {},
+  handler: async (ctx) => {
+    const rows: { vin: string; mileage: number | null }[] = await ctx.runQuery(internal.listings.activeWithVin, {});
+    let filed = 0;
+    for (const r of rows) {
+      const val = await carblyLookup(r.vin, r.mileage);
+      if (val.uuid && (await assignToFolder(val.uuid))) filed++;
+    }
+    return { total: rows.length, filed };
   },
 });
 

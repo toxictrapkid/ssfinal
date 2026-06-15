@@ -328,6 +328,17 @@ export const existingByDedupeKeys = internalQuery({
   },
 });
 
+// Active qualifiers with a VIN — used to backfill the Carbly "KSL leads" folder.
+export const activeWithVin = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("listings").collect();
+    return rows
+      .filter((r) => r.vin && (r.status === "active" || r.status === "price_drop"))
+      .map((r) => ({ vin: r.vin as string, mileage: r.mileage ?? null }));
+  },
+});
+
 const carblyDeal = v.object({
   source: v.string(),
   sourceListingId: v.string(),
@@ -360,8 +371,8 @@ const carblyDeal = v.object({
 // Upsert Carbly-qualified deals. No curve scoring — values come straight from
 // the gap rule (price vs JD clean trade / KBB lending).
 export const dealUpsert = internalMutation({
-  args: { searchId: v.optional(v.id("searches")), deals: v.array(carblyDeal) },
-  handler: async (ctx, { searchId, deals }) => {
+  args: { searchId: v.optional(v.id("searches")), deals: v.array(carblyDeal), notify: v.optional(v.boolean()) },
+  handler: async (ctx, { searchId, deals, notify }) => {
     const now = Date.now();
     const result = { inserted: 0, updated: 0, priceDrops: 0, hot: 0 };
     for (const d of deals) {
@@ -392,7 +403,7 @@ export const dealUpsert = internalMutation({
         .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", dedupeKey))
         .first();
       if (!existing) {
-        await ctx.db.insert("listings", {
+        const id = await ctx.db.insert("listings", {
           dedupeKey,
           source: d.source,
           sourceListingId: d.sourceListingId,
@@ -421,6 +432,10 @@ export const dealUpsert = internalMutation({
         });
         result.inserted++;
         if (d.hot) result.hot++;
+        // Text the user for NEW Contact-Now deals (only when notify=true: cron, not backfill)
+        if (notify && d.hot) {
+          await ctx.scheduler.runAfter(0, internal.notifications.sendDealSms, { listingId: id });
+        }
         continue;
       }
       const priceChanged = d.price !== existing.price;
