@@ -18,7 +18,7 @@ import { internalAction, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { fetchKslListings, brightDataConfigured, type KslSearchConfig } from "./lib/kslWebUnlocker";
-import { carblyLookup, applyGapRule, carblyConfigured, assignToFolder, BRANDED_FACTOR } from "./lib/carblyClient";
+import { carblyLookup, applyGapRule, carblyConfigured, assignToFolder, carblyLogin, BRANDED_FACTOR, type CarblySession } from "./lib/carblyClient";
 import { dedupeKeyFor } from "./lib/dedupe";
 
 // Carbly's limit is one ACTIVE DEVICE at a time (not call volume), so normal
@@ -75,7 +75,8 @@ async function scanOne(
   cfg: KslSearchConfig,
   factor: number,
   titleStatus: string,
-  notify: boolean
+  notify: boolean,
+  session: CarblySession
 ): Promise<SweepResult> {
   const listings = (await fetchKslListings(cfg)).filter((l) => l.vin);
   const keyByListing = new Map<string, (typeof listings)[number]>();
@@ -100,12 +101,12 @@ async function scanOne(
   let hot = 0;
   for (const l of toEnrich) {
     if (enriched > 0) await new Promise((r) => setTimeout(r, CARBLY_DELAY_MS)); // pace Carbly
-    const val = await carblyLookup(l.vin!, l.mileage);
+    const val = await carblyLookup(l.vin!, l.mileage, session);
     enriched++;
     if (val.jdCleanTrade == null && val.kbbLending == null) continue;
     const g = applyGapRule(l.price, val, { factor, branded: titleStatus === "branded" });
     if (!g.qualifies) continue;
-    if (val.uuid) await assignToFolder(val.uuid); // file every qualifier into "KSL leads"
+    if (val.uuid) await assignToFolder(val.uuid, session); // file every qualifier into "KSL leads"
     if (g.hot) hot++;
     deals.push({
       source: "ksl",
@@ -152,6 +153,8 @@ async function scanBand(
 ): Promise<SweepResult> {
   if (!brightDataConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "BRIGHTDATA_API_TOKEN not set" };
   if (!carblyConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "Carbly env not set" };
+  const session = await carblyLogin(); // fresh login each run -> reclaims the single-device slot
+  if (!session) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "Carbly login failed" };
   const cell: KslSearchConfig = {
     ...BASE_CONFIG,
     priceMin,
@@ -161,10 +164,10 @@ async function scanBand(
     yearMin: yearMin ?? CURRENT_YEAR - 10,
     yearMax,
   };
-  const clean = await scanOne(ctx, { ...cell, titleType: CLEAN_TITLE }, 1.0, "clean", notify);
+  const clean = await scanOne(ctx, { ...cell, titleType: CLEAN_TITLE }, 1.0, "clean", notify, session);
   let branded: SweepResult = { scraped: 0, enriched: 0, qualified: 0, hot: 0 };
   try {
-    branded = await scanOne(ctx, { ...cell, titleType: BRANDED_TITLE }, BRANDED_FACTOR, "branded", notify);
+    branded = await scanOne(ctx, { ...cell, titleType: BRANDED_TITLE }, BRANDED_FACTOR, "branded", notify, session);
   } catch (e) {
     branded.error = String(e).slice(0, 120);
   }
@@ -198,11 +201,13 @@ export const runScan = internalAction({
 export const backfillFolder = action({
   args: {},
   handler: async (ctx) => {
+    const session = await carblyLogin();
+    if (!session) return { total: 0, filed: 0, error: "Carbly login failed" };
     const rows: { vin: string; mileage: number | null }[] = await ctx.runQuery(internal.listings.activeWithVin, {});
     let filed = 0;
     for (const r of rows) {
-      const val = await carblyLookup(r.vin, r.mileage);
-      if (val.uuid && (await assignToFolder(val.uuid))) filed++;
+      const val = await carblyLookup(r.vin, r.mileage, session);
+      if (val.uuid && (await assignToFolder(val.uuid, session))) filed++;
     }
     return { total: rows.length, filed };
   },

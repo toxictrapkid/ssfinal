@@ -1,37 +1,45 @@
 /**
- * Carbly book-value client (server-side, used from the scan action).
+ * Carbly book-value client with AUTO-LOGIN (server-side, used from the scan action).
  *
- * Carbly authenticates with Rails devise_token_auth headers (access-token /
- * client / uid). The token in the user's account is long-lived. Per-VIN flow:
- *   POST /v6/vehicles {vin, mileage}  -> creates/values the vehicle, returns uuid
- *   GET  /v6/vehicles/{uuid}          -> full_valuations with every book
+ * Carbly allows only one active device per account, so a static token gets
+ * "bumped" whenever another device (your phone/browser) uses Carbly. To stay
+ * reliable for automation we log in fresh at the start of each run
+ * (POST /v6/auth/sign_in, devise_token_auth) and use that session's headers for
+ * every call — reclaiming the slot each time.
  *
- * We extract the two books the deal rule uses, mileage-adjusted:
- *   - JD Power (NADA) clean trade-in  = full_valuations.nada.results[0].appraisal.clean.tradein.adjusted
- *   - KBB lending                     = full_valuations.kbb.results[0].appraisal.lending.adjusted
+ * Per-VIN flow once authed:
+ *   POST /v6/vehicles {vin, mileage}  -> creates/values, returns uuid
+ *   GET  /v6/vehicles/{uuid}          -> full_valuations (mileage-adjusted books)
+ *   JD Power (NADA) clean trade-in = full_valuations.nada.results[0].appraisal.clean.tradein.adjusted
+ *   KBB lending                    = full_valuations.kbb.results[0].appraisal.lending.adjusted
  *
- * Credentials come from Convex env vars (never committed):
- *   CARBLY_ACCESS_TOKEN, CARBLY_CLIENT, CARBLY_UID
+ * Env vars (Convex): CARBLY_EMAIL, CARBLY_PASSWORD, CARBLY_FOLDER_ID
+ * NOTE: auto-login bumps your personal Carbly app each run — use a dedicated
+ * Carbly login for the scanner if you also use Carbly yourself.
  */
 
 const CARBLY_BASE = "https://api.getcarbly.com";
 const SFX = "?platform=web&app_version=6.7.4";
 
+export interface CarblySession {
+  accessToken: string;
+  client: string;
+  uid: string;
+}
+
 export interface CarblyValuation {
-  jdCleanTrade: number | null; // JD Power / NADA clean trade-in (mileage adjusted)
-  kbbLending: number | null; // KBB lending (mileage adjusted)
+  jdCleanTrade: number | null;
+  kbbLending: number | null;
   uuid: string | null;
 }
 
-function headers(): Record<string, string> {
-  const accessToken = process.env.CARBLY_ACCESS_TOKEN ?? "";
-  const client = process.env.CARBLY_CLIENT ?? "";
-  const uid = process.env.CARBLY_UID ?? "";
+function sessionHeaders(s: CarblySession): Record<string, string> {
   return {
-    "access-token": accessToken,
-    client,
-    uid,
+    "access-token": s.accessToken,
+    client: s.client,
+    uid: s.uid,
     "token-type": "Bearer",
+    Authorization: `Bearer ${s.accessToken}`,
     Origin: "https://web.getcarbly.com",
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -39,17 +47,39 @@ function headers(): Record<string, string> {
 }
 
 export function carblyConfigured(): boolean {
-  return !!(process.env.CARBLY_ACCESS_TOKEN && process.env.CARBLY_CLIENT && process.env.CARBLY_UID);
+  return !!(process.env.CARBLY_EMAIL && process.env.CARBLY_PASSWORD);
 }
 
-/** File a Carbly vehicle into the "KSL leads" folder (id from CARBLY_FOLDER_ID). */
-export async function assignToFolder(uuid: string): Promise<boolean> {
+/** Log in fresh and return a session (reclaims the single-device slot). */
+export async function carblyLogin(): Promise<CarblySession | null> {
+  const email = process.env.CARBLY_EMAIL;
+  const password = process.env.CARBLY_PASSWORD;
+  if (!email || !password) return null;
+  try {
+    const r = await fetch(`${CARBLY_BASE}/v6/auth/sign_in${SFX}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://web.getcarbly.com", Accept: "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!r.ok) return null;
+    const accessToken = r.headers.get("access-token");
+    const client = r.headers.get("client");
+    const uid = r.headers.get("uid") ?? email;
+    if (!accessToken || !client) return null;
+    return { accessToken, client, uid };
+  } catch {
+    return null;
+  }
+}
+
+/** File a Carbly vehicle into the "KSL leads" folder (CARBLY_FOLDER_ID). */
+export async function assignToFolder(uuid: string, session: CarblySession): Promise<boolean> {
   const fid = process.env.CARBLY_FOLDER_ID;
-  if (!fid || !uuid || !carblyConfigured()) return false;
+  if (!fid || !uuid) return false;
   try {
     const r = await fetch(`${CARBLY_BASE}/v6/vehicles/${uuid}${SFX}`, {
       method: "PATCH",
-      headers: headers(),
+      headers: sessionHeaders(session),
       body: JSON.stringify({ vehicle_folder_id: Number(fid) }),
     });
     return r.ok;
@@ -58,7 +88,6 @@ export async function assignToFolder(uuid: string): Promise<boolean> {
   }
 }
 
-/** Pull the mileage-adjusted (falling back to base) value out of an appraisal node. */
 function nodeValue(node: unknown): number | null {
   if (!node || typeof node !== "object") return null;
   const n = node as Record<string, unknown>;
@@ -66,19 +95,19 @@ function nodeValue(node: unknown): number | null {
   return typeof v === "number" && v > 0 ? Math.round(v) : null;
 }
 
-/**
- * Look up JD clean trade-in + KBB lending for a VIN at the given mileage.
- * Returns nulls (not throwing) on any failure so one bad VIN never breaks a scan.
- */
-export async function carblyLookup(vin: string, mileage: number | null): Promise<CarblyValuation> {
+/** JD clean trade-in + KBB lending for a VIN at mileage. Never throws. */
+export async function carblyLookup(
+  vin: string,
+  mileage: number | null,
+  session: CarblySession
+): Promise<CarblyValuation> {
   const empty: CarblyValuation = { jdCleanTrade: null, kbbLending: null, uuid: null };
-  if (!carblyConfigured()) return empty;
   try {
     const body: Record<string, unknown> = { vin };
     if (mileage && mileage > 0) body.mileage = mileage;
     const post = await fetch(`${CARBLY_BASE}/v6/vehicles${SFX}`, {
       method: "POST",
-      headers: headers(),
+      headers: sessionHeaders(session),
       body: JSON.stringify(body),
     });
     if (!post.ok) return empty;
@@ -87,55 +116,43 @@ export async function carblyLookup(vin: string, mileage: number | null): Promise
     const uuid = typeof cdata.uuid === "string" ? cdata.uuid : null;
     if (!uuid) return empty;
 
-    const det = await fetch(`${CARBLY_BASE}/v6/vehicles/${uuid}${SFX}`, { headers: headers() });
+    const det = await fetch(`${CARBLY_BASE}/v6/vehicles/${uuid}${SFX}`, { headers: sessionHeaders(session) });
     if (!det.ok) return { ...empty, uuid };
     const dj = (await det.json()) as Record<string, unknown>;
     const d = (dj.data ?? dj) as Record<string, unknown>;
     const fv = (d.full_valuations ?? {}) as Record<string, unknown>;
-
     const nada = fv.nada as Record<string, unknown> | undefined;
     const kbb = fv.kbb as Record<string, unknown> | undefined;
-    const nadaApp = (nada?.results as Record<string, unknown>[] | undefined)?.[0]?.appraisal as
-      | Record<string, unknown>
-      | undefined;
-    const kbbApp = (kbb?.results as Record<string, unknown>[] | undefined)?.[0]?.appraisal as
-      | Record<string, unknown>
-      | undefined;
-
+    const nadaApp = (nada?.results as Record<string, unknown>[] | undefined)?.[0]?.appraisal as Record<string, unknown> | undefined;
+    const kbbApp = (kbb?.results as Record<string, unknown>[] | undefined)?.[0]?.appraisal as Record<string, unknown> | undefined;
     const jdNode = (nadaApp?.clean as Record<string, unknown> | undefined)?.tradein;
     const kbbNode = kbbApp?.lending;
-
-    return {
-      jdCleanTrade: nodeValue(jdNode),
-      kbbLending: nodeValue(kbbNode),
-      uuid,
-    };
+    return { jdCleanTrade: nodeValue(jdNode), kbbLending: nodeValue(kbbNode), uuid };
   } catch {
     return empty;
   }
 }
 
 export interface GapResult {
-  effJd: number | null; // title-adjusted JD clean trade
-  effKbb: number | null; // title-adjusted KBB lending
-  jdGap: number | null; // effJd - price
-  kbbGap: number | null; // effKbb - price
+  effJd: number | null;
+  effKbb: number | null;
+  jdGap: number | null;
+  kbbGap: number | null;
   qualifies: boolean;
   hot: boolean;
-  bestGap: number; // estValue - price (can be slightly negative for marginal qualifiers)
-  estValue: number | null; // higher adjusted book, for display
+  bestGap: number;
+  estValue: number | null;
 }
 
 // Buy-box thresholds (user rule 2026-06-15):
-//   QUALIFY (review list): price <= reference book + $750 (within $750 over, or anything below)
-//   CONTACT NOW (hot):     price >= $1,000 under the reference book(s)
-//   clean title  -> reference = the HIGHER of JD clean trade / KBB lending; contact-now needs under BOTH
-//   branded/salvage -> books discounted to 70% and the decision FOCUSES on JD clean trade
+//   QUALIFY: price <= reference book + $750 (within $750 over, or anything below)
+//   CONTACT NOW (hot): price >= $1,000 under the reference book(s)
+//   clean -> reference = higher of JD clean trade / KBB lending; contact-now needs under BOTH
+//   branded/salvage -> books at 70%, decision FOCUSES on JD clean trade
 export const QUALIFY_ABOVE = 750;
 export const CONTACT_NOW_UNDER = 1000;
 export const BRANDED_FACTOR = 0.7;
 
-/** factor: 1.0 clean / 0.7 branded. branded => decide on JD trade (70%). */
 export function applyGapRule(
   price: number,
   val: CarblyValuation,
@@ -152,7 +169,6 @@ export function applyGapRule(
   let hot = false;
   let estValue: number | null = null;
   if (branded) {
-    // focus on JD trade (70%); fall back to KBB (70%) only when JD is missing
     const ref = effJd ?? effKbb;
     const refGap = effJd != null ? jdGap : kbbGap;
     estValue = ref;
