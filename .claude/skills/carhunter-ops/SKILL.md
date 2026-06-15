@@ -24,6 +24,42 @@ Repo: `toxictrapkid/ssfinal`, branch `claude/eager-gates-de2pwu`. Read
 `PROGRESS.md` (loop memory + every standing user override), `ARCHITECTURE.md`
 (full design), and `README.md` (setup) before making changes.
 
+## Goal / north star (read this first)
+
+The user is a **wholesale car buyer leaving the auctions**. The single biggest
+problem in that business is **finding undervalued private-party cars before
+anyone else** — that is the one job CarHunter must do perfectly. Everything
+else serves the ranked deal feed.
+
+Definition of done (from `VISION.md`) — the app is finished when all of these
+are true with zero human action after setup:
+
+1. Open the app → the seeded buy-box scans are **already running on a schedule**
+   (every 15 min, around Salt Lake City 84104, 150-mile radius).
+2. A live, **ranked feed of private-party cars**: photo, year/make/model+trim,
+   miles, asking price, estimated resale value, **estimated profit**, deal
+   score (0–100), source, distance, days listed, link.
+3. Any car with **estProfit ≥ $1,500** is flagged HOT and an email/SMS alert
+   fires the moment it lands — once per car unless its price drops.
+4. **Pursue / Pass / Contacted** buttons work; pursued cars move to a pipeline
+   board (Lead → Contacted → Negotiating → Bought → Flipped → Dead) with
+   suggested target-buy and walk-away numbers.
+5. Price drops, relists, and gone/sold are tracked automatically; **one row per
+   real car** across sources (dedupe).
+6. The user **never opens a scraper, terminal, or database.**
+
+**Current state:** CarHunter is **built and shipped** — all 11 milestones
+(architecture → schema → scrapers → ingest → scoring → scheduler → dashboard →
+alerts → polish → end-to-end) are complete and were each independently reviewed,
+and the full VISION chain was verified end to end (scheduled scan → scrape →
+ingest → score → HOT deal in the feed → alert) using fixture data. **The only
+gap between "shipped" and "live with real cars today" is getting a real KSL
+scrape to flow** — which is blocked from the Claude web sandbox by network
+egress (see next section) and, on a real machine, may need the Bright Data
+proxy to get past KSL bot protection. **Your job as the operating agent: get
+real KSL listings flowing into a deployment, scored and ranked, with a URL the
+user can open — without rebuilding anything.**
+
 ## The single most important constraint
 
 CarHunter was built inside the Claude Code web sandbox, whose **network egress
