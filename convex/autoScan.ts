@@ -38,15 +38,21 @@ const BASE_CONFIG: KslSearchConfig = {
 const CLEAN_TITLE = "Clean Title";
 const BRANDED_TITLE = "Salvage Title;Rebuilt/Reconstructed Title";
 
-// KSL renders ~24 per filter combo, so we sweep the market by rotating through
-// narrow price bands — one band per tick. Full sweep ≈ hourly.
-const PRICE_BANDS: [number, number][] = [
-  [500, 2000], [2000, 3000], [3000, 4000], [4000, 5000], [5000, 6000],
-  [6000, 7000], [7000, 8000], [8000, 9000], [9000, 10000], [10000, 11500],
-  [11500, 13000], [13000, 14500], [14500, 16000], [16000, 17500], [17500, 19000],
-  [19000, 21000], [21000, 23000], [23000, 25000], [25000, 27500], [27500, 30000],
-  [30000, 33000], [33000, 37000], [37000, 42000], [42000, 50000], [50000, 65000],
+// KSL only returns ~30 listings per filter combo (pagination is client-side and
+// can't be paged), so to capture EVERY eligible listing we slice on three
+// dimensions — title × mileage × price — keeping each cell under the cap.
+const MILEAGE_BANDS: [number, number][] = [
+  [0, 50000], [50000, 75000], [75000, 95000], [95000, 110000],
 ];
+const PRICE_BANDS: [number, number][] = [
+  [500, 4000], [4000, 6000], [6000, 8000], [8000, 10000], [10000, 12000],
+  [12000, 14500], [14500, 17500], [17500, 21000], [21000, 25000], [25000, 30000],
+  [30000, 40000], [40000, 65000],
+];
+// Cartesian grid of (mileage band × price band) cells the cron rotates through.
+const GRID: { mmin: number; mmax: number; pmin: number; pmax: number }[] = MILEAGE_BANDS.flatMap(
+  ([mmin, mmax]) => PRICE_BANDS.map(([pmin, pmax]) => ({ mmin, mmax, pmin, pmax }))
+);
 
 function dealScoreFor(bestGap: number, price: number, hot: boolean): number {
   const pct = (bestGap / Math.max(price, 1)) * 100; // % under (or over, if negative) book
@@ -128,14 +134,21 @@ async function scanOne(
   return { scraped: listings.length, enriched, qualified: deals.length, hot };
 }
 
-/** Sweep one price band: clean-title (full books) + branded-title (70% books). */
-async function scanBand(ctx: { runQuery: any; runMutation: any }, priceMin: number, priceMax: number): Promise<SweepResult> {
+/** Sweep one grid cell: clean-title (full books) + branded-title (70% books). */
+async function scanBand(
+  ctx: { runQuery: any; runMutation: any },
+  priceMin: number,
+  priceMax: number,
+  mileageMin = 0,
+  mileageMax = 110000
+): Promise<SweepResult> {
   if (!brightDataConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "BRIGHTDATA_API_TOKEN not set" };
   if (!carblyConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "Carbly env not set" };
-  const clean = await scanOne(ctx, { ...BASE_CONFIG, priceMin, priceMax, titleType: CLEAN_TITLE }, 1.0, "clean");
+  const cell = { ...BASE_CONFIG, priceMin, priceMax, mileageMin, mileageMax };
+  const clean = await scanOne(ctx, { ...cell, titleType: CLEAN_TITLE }, 1.0, "clean");
   let branded: SweepResult = { scraped: 0, enriched: 0, qualified: 0, hot: 0 };
   try {
-    branded = await scanOne(ctx, { ...BASE_CONFIG, priceMin, priceMax, titleType: BRANDED_TITLE }, BRANDED_FACTOR, "branded");
+    branded = await scanOne(ctx, { ...cell, titleType: BRANDED_TITLE }, BRANDED_FACTOR, "branded");
   } catch (e) {
     branded.error = String(e).slice(0, 120);
   }
@@ -148,22 +161,26 @@ async function scanBand(ctx: { runQuery: any; runMutation: any }, priceMin: numb
   };
 }
 
-/** Cron entrypoint — sweep one rotating price band per tick (full market ≈ hourly). */
+/** Cron entrypoint — sweep one rotating grid cell per tick (full market ≈ every ~1.5h). */
 export const runScan = internalAction({
   args: {},
   handler: async (ctx) => {
-    const idx = Math.floor(Date.now() / 120000) % PRICE_BANDS.length;
-    const [pmin, pmax] = PRICE_BANDS[idx];
-    const res = await scanBand(ctx, pmin, pmax);
-    console.log(`autoScan band $${pmin}-${pmax}:`, JSON.stringify(res));
+    const cell = GRID[Math.floor(Date.now() / 120000) % GRID.length];
+    const res = await scanBand(ctx, cell.pmin, cell.pmax, cell.mmin, cell.mmax);
+    console.log(`autoScan $${cell.pmin}-${cell.pmax} / ${cell.mmin}-${cell.mmax}mi:`, JSON.stringify(res));
     return res;
   },
 });
 
-/** Manual trigger: sweep a specific price band now (used to backfill the whole market). */
+/** Manual trigger: sweep a specific price (and optional mileage) cell now — used to backfill. */
 export const scanNow = action({
-  args: { priceMin: v.number(), priceMax: v.number() },
-  handler: async (ctx, { priceMin, priceMax }) => {
-    return await scanBand(ctx, priceMin, priceMax);
+  args: {
+    priceMin: v.number(),
+    priceMax: v.number(),
+    mileageMin: v.optional(v.number()),
+    mileageMax: v.optional(v.number()),
+  },
+  handler: async (ctx, { priceMin, priceMax, mileageMin, mileageMax }) => {
+    return await scanBand(ctx, priceMin, priceMax, mileageMin ?? 0, mileageMax ?? 110000);
   },
 });
