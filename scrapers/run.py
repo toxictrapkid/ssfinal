@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from typing import Any, Callable
@@ -26,6 +27,7 @@ import requests
 
 import facebook
 import ksl
+import ksl_unlocker
 from facebook import ScraperDisabled
 
 log = logging.getLogger("carhunter.run")
@@ -95,7 +97,14 @@ def run_source(source: str, config: dict, args: argparse.Namespace) -> list[dict
         # count it as a failure (M4 reviewer advisory A5)
         raise RuntimeError(f"{source}: unknown source (known: {sorted(SCRAPERS)})")
     if source == "ksl":
-        return scraper(config, max_pages=args.max_pages, items_file=args.items_file)
+        # Live KSL is behind PerimeterX, so the requests path (ksl.py) gets 403'd;
+        # use the Bright Data Web Unlocker path when a token is configured. The
+        # requests path remains for offline fixtures (--items-file).
+        if args.items_file:
+            return ksl.run(config, max_pages=args.max_pages, items_file=args.items_file)
+        if os.environ.get("BRIGHTDATA_API_TOKEN"):
+            return ksl_unlocker.run(config, max_pages=args.max_pages)
+        return ksl.run(config, max_pages=args.max_pages, items_file=None)
     return scraper(config)
 
 
