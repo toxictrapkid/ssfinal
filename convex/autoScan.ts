@@ -21,38 +21,40 @@ import { fetchKslListings, brightDataConfigured, type KslSearchConfig } from "./
 import { carblyLookup, applyGapRule, carblyConfigured, assignToFolder, BRANDED_FACTOR } from "./lib/carblyClient";
 import { dedupeKeyFor } from "./lib/dedupe";
 
-const MAX_ENRICH_PER_SWEEP = 24; // bound Carbly calls + action time per sweep
+// Throttle: Carbly locks the session under bulk automation, so keep each tick
+// small and pace the lookups. The cron trickles only NEW listings; never bulk.
+const MAX_ENRICH_PER_SWEEP = 8; // gentle per-tick cap
+const CARBLY_DELAY_MS = 400; // pause between Carbly lookups
 const CURRENT_YEAR = new Date().getFullYear();
 
-// Buy-box filters: < 10 years old, <= 110k miles, FSBO.
 const BASE_CONFIG: KslSearchConfig = {
   makes: [],
   models: [],
   zip: "84104",
   radiusMiles: 150,
-  yearMin: CURRENT_YEAR - 10,
-  mileageMax: 110000,
   sort: "NEWEST_TO_OLDEST",
 };
 
 const CLEAN_TITLE = "Clean Title";
 const BRANDED_TITLE = "Salvage Title;Rebuilt/Reconstructed Title";
 
-// KSL only returns ~30 listings per filter combo (pagination is client-side and
-// can't be paged), so to capture EVERY eligible listing we slice on three
-// dimensions — title × mileage × price — keeping each cell under the cap.
-const MILEAGE_BANDS: [number, number][] = [
-  [0, 50000], [50000, 75000], [75000, 95000], [95000, 110000],
+// Two buy-box age profiles (user rules): newer cars to 110k, older cars to 120k.
+const AGE_PROFILES: { yearMin: number; yearMax?: number; mileageBands: [number, number][] }[] = [
+  { yearMin: CURRENT_YEAR - 10, mileageBands: [[0, 50000], [50000, 75000], [75000, 95000], [95000, 110000]] }, // 2016+, <=110k
+  { yearMin: 2010, yearMax: 2015, mileageBands: [[0, 60000], [60000, 90000], [90000, 120000]] }, // 2010-2015, <=120k
 ];
 const PRICE_BANDS: [number, number][] = [
   [500, 4000], [4000, 6000], [6000, 8000], [8000, 10000], [10000, 12000],
   [12000, 14500], [14500, 17500], [17500, 21000], [21000, 25000], [25000, 30000],
   [30000, 40000], [40000, 65000],
 ];
-// Cartesian grid of (mileage band × price band) cells the cron rotates through.
-const GRID: { mmin: number; mmax: number; pmin: number; pmax: number }[] = MILEAGE_BANDS.flatMap(
-  ([mmin, mmax]) => PRICE_BANDS.map(([pmin, pmax]) => ({ mmin, mmax, pmin, pmax }))
-);
+// Grid of (age profile × mileage band × price band) cells the cron rotates through.
+const GRID: { yearMin: number; yearMax?: number; mmin: number; mmax: number; pmin: number; pmax: number }[] =
+  AGE_PROFILES.flatMap((p) =>
+    p.mileageBands.flatMap(([mmin, mmax]) =>
+      PRICE_BANDS.map(([pmin, pmax]) => ({ yearMin: p.yearMin, yearMax: p.yearMax, mmin, mmax, pmin, pmax }))
+    )
+  );
 
 function dealScoreFor(bestGap: number, price: number, hot: boolean): number {
   const pct = (bestGap / Math.max(price, 1)) * 100; // % under (or over, if negative) book
@@ -97,6 +99,7 @@ async function scanOne(
   let enriched = 0;
   let hot = 0;
   for (const l of toEnrich) {
+    if (enriched > 0) await new Promise((r) => setTimeout(r, CARBLY_DELAY_MS)); // pace Carbly
     const val = await carblyLookup(l.vin!, l.mileage);
     enriched++;
     if (val.jdCleanTrade == null && val.kbbLending == null) continue;
@@ -142,12 +145,22 @@ async function scanBand(
   priceMin: number,
   priceMax: number,
   mileageMin = 0,
-  mileageMax = 110000,
-  notify = false
+  mileageMax = 120000,
+  notify = false,
+  yearMin?: number,
+  yearMax?: number
 ): Promise<SweepResult> {
   if (!brightDataConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "BRIGHTDATA_API_TOKEN not set" };
   if (!carblyConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "Carbly env not set" };
-  const cell = { ...BASE_CONFIG, priceMin, priceMax, mileageMin, mileageMax };
+  const cell: KslSearchConfig = {
+    ...BASE_CONFIG,
+    priceMin,
+    priceMax,
+    mileageMin,
+    mileageMax,
+    yearMin: yearMin ?? CURRENT_YEAR - 10,
+    yearMax,
+  };
   const clean = await scanOne(ctx, { ...cell, titleType: CLEAN_TITLE }, 1.0, "clean", notify);
   let branded: SweepResult = { scraped: 0, enriched: 0, qualified: 0, hot: 0 };
   try {
@@ -168,9 +181,15 @@ async function scanBand(
 export const runScan = internalAction({
   args: {},
   handler: async (ctx) => {
+    // Kill-switch: only run when explicitly enabled (set SCAN_ENABLED=true once
+    // the Carbly token is healthy — keeps the cron from poking a locked account).
+    if (process.env.SCAN_ENABLED !== "true") {
+      console.log("autoScan paused (SCAN_ENABLED != true)");
+      return { paused: true };
+    }
     const cell = GRID[Math.floor(Date.now() / 120000) % GRID.length];
-    const res = await scanBand(ctx, cell.pmin, cell.pmax, cell.mmin, cell.mmax, true); // notify on new deals
-    console.log(`autoScan $${cell.pmin}-${cell.pmax} / ${cell.mmin}-${cell.mmax}mi:`, JSON.stringify(res));
+    const res = await scanBand(ctx, cell.pmin, cell.pmax, cell.mmin, cell.mmax, true, cell.yearMin, cell.yearMax);
+    console.log(`autoScan ${cell.yearMin}${cell.yearMax ? "-" + cell.yearMax : "+"} $${cell.pmin}-${cell.pmax} / ${cell.mmin}-${cell.mmax}mi:`, JSON.stringify(res));
     return res;
   },
 });
@@ -196,8 +215,10 @@ export const scanNow = action({
     priceMax: v.number(),
     mileageMin: v.optional(v.number()),
     mileageMax: v.optional(v.number()),
+    yearMin: v.optional(v.number()),
+    yearMax: v.optional(v.number()),
   },
-  handler: async (ctx, { priceMin, priceMax, mileageMin, mileageMax }) => {
-    return await scanBand(ctx, priceMin, priceMax, mileageMin ?? 0, mileageMax ?? 110000);
+  handler: async (ctx, { priceMin, priceMax, mileageMin, mileageMax, yearMin, yearMax }) => {
+    return await scanBand(ctx, priceMin, priceMax, mileageMin ?? 0, mileageMax ?? 120000, false, yearMin, yearMax);
   },
 });
