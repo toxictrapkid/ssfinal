@@ -25,6 +25,7 @@ import { dedupeKeyFor } from "./lib/dedupe";
 // throughput is fine — just don't run it while you're using Carbly yourself.
 const MAX_ENRICH_PER_SWEEP = 20; // per-cell cap (cells are small after mileage×price slicing)
 const CARBLY_DELAY_MS = 150; // light pacing between Carbly lookups
+const ENRICH_BATCH = 15; // queue rows the enrich cron drains per tick
 const CURRENT_YEAR = new Date().getFullYear();
 
 const BASE_CONFIG: KslSearchConfig = {
@@ -60,6 +61,30 @@ function dealScoreFor(bestGap: number, price: number, hot: boolean): number {
   const pct = (bestGap / Math.max(price, 1)) * 100; // % under (or over, if negative) book
   const base = Math.min(100, Math.max(0, Math.round(50 + pct)));
   return hot ? Math.min(100, base + 15) : base;
+}
+
+/** Map a raw KSL listing to a scrape-queue row (no Carbly). */
+function kslToQueueItem(l: any, titleType: "clean" | "branded") {
+  return {
+    dedupeKey: dedupeKeyFor({ vin: l.vin, year: l.year, make: l.make, model: l.model, mileage: l.mileage, zip: l.zip, source: "ksl", sourceListingId: l.sourceListingId }),
+    source: "ksl",
+    sourceListingId: l.sourceListingId,
+    url: l.url,
+    title: l.title,
+    vin: l.vin as string,
+    year: l.year ?? undefined,
+    make: l.make ?? undefined,
+    model: l.model ?? undefined,
+    trim: l.trim ?? undefined,
+    mileage: l.mileage ?? undefined,
+    price: l.price,
+    titleType,
+    zip: l.zip ?? undefined,
+    location: l.location ?? undefined,
+    photoUrl: l.photoUrl ?? undefined,
+    photos: l.photos ?? [],
+    postedAt: l.postedAt ?? undefined,
+  };
 }
 
 interface SweepResult {
@@ -242,6 +267,118 @@ export const runScan = internalAction({
     const tag = res.limited ? " [CARBLY LIMIT REACHED — cooling down 3h]" : "";
     console.log(`autoScan ${cell.yearMin}${cell.yearMax ? "-" + cell.yearMax : "+"} $${cell.pmin}-${cell.pmax} / ${cell.mmin}-${cell.mmax}mi:${tag}`, JSON.stringify(res));
     return res;
+  },
+});
+
+/**
+ * Continuous scrape (NO Carbly) — runs every 2 min, stores every buy-box
+ * candidate in the queue. Never blocked by the Carbly limit; just fills the
+ * queue so the enricher can value them whenever quota is available.
+ */
+export const scrapeTick = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    if (process.env.SCAN_ENABLED !== "true") return { paused: true };
+    if (!brightDataConfigured()) return { error: "BRIGHTDATA_API_TOKEN not set" };
+    const cell = GRID[Math.floor(Date.now() / 120000) % GRID.length];
+    const base: KslSearchConfig = {
+      ...BASE_CONFIG,
+      priceMin: cell.pmin,
+      priceMax: cell.pmax,
+      mileageMin: cell.mmin,
+      mileageMax: cell.mmax,
+      yearMin: cell.yearMin,
+      yearMax: cell.yearMax,
+    };
+    const queued = { inserted: 0, repriced: 0, seen: 0 };
+    for (const [titleType, titleFilter] of [["clean", CLEAN_TITLE], ["branded", BRANDED_TITLE]] as const) {
+      try {
+        const listings = (await fetchKslListings({ ...base, titleType: titleFilter })).filter((l) => l.vin);
+        const items = listings.map((l) => kslToQueueItem(l, titleType));
+        if (items.length) {
+          const r = await ctx.runMutation(internal.scrapeQueue.enqueueScraped, { items });
+          queued.inserted += r.inserted;
+          queued.repriced += r.repriced;
+          queued.seen += r.seen;
+        }
+      } catch (e) {
+        console.log("scrapeTick error", titleType, String(e).slice(0, 120));
+      }
+    }
+    console.log(`scrapeTick ${cell.yearMin}${cell.yearMax ? "-" + cell.yearMax : "+"} $${cell.pmin}-${cell.pmax}/${cell.mmin}-${cell.mmax}mi:`, JSON.stringify(queued));
+    return queued;
+  },
+});
+
+/**
+ * Deferred enrichment — runs every 2 min, drains pending queue rows through
+ * Carbly (JD clean trade + KBB lending), applies the gap rule, files qualifiers
+ * into "KSL leads" + texts Contact-Now deals. Honors the 3h cooldown after the
+ * daily cap, so it auto-resumes draining the backlog once Carbly resets.
+ */
+export const enrichTick = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    if (process.env.SCAN_ENABLED !== "true") return { paused: true };
+    if (!carblyConfigured()) return { error: "Carbly env not set" };
+    const st = await ctx.runQuery(internal.autoScan.getScanState, {});
+    if (st?.carblyLimitedAt && Date.now() - st.carblyLimitedAt < CARBLY_COOLDOWN_MS) {
+      const mins = Math.round((CARBLY_COOLDOWN_MS - (Date.now() - st.carblyLimitedAt)) / 60000);
+      return { coolingDown: true, minutesLeft: mins };
+    }
+    const pending = await ctx.runQuery(internal.scrapeQueue.pendingToEnrich, { limit: ENRICH_BATCH });
+    if (!pending.length) return { pending: 0 };
+    const session = await carblyLogin();
+    if (!session) return { error: "Carbly login failed" };
+    const deals: any[] = [];
+    let enriched = 0;
+    let hot = 0;
+    let limited = false;
+    for (const q of pending) {
+      if (enriched > 0) await new Promise((r) => setTimeout(r, CARBLY_DELAY_MS)); // pace Carbly
+      const val = await carblyLookup(q.vin, q.mileage ?? null, session);
+      if (val.limited) { limited = true; break; } // daily cap -> stop, leave row pending
+      enriched++;
+      await ctx.runMutation(internal.scrapeQueue.markEnriched, { dedupeKey: q.dedupeKey, price: q.price });
+      if (val.jdCleanTrade == null && val.kbbLending == null) continue;
+      const branded = q.titleType === "branded";
+      const g = applyGapRule(q.price, val, { factor: branded ? BRANDED_FACTOR : 1.0, branded });
+      if (!g.qualifies) continue;
+      if (val.uuid) await assignToFolder(val.uuid, session);
+      if (g.hot) hot++;
+      deals.push({
+        source: q.source,
+        sourceListingId: q.sourceListingId,
+        url: q.url,
+        title: q.title,
+        year: q.year ?? null,
+        make: q.make ?? null,
+        model: q.model ?? null,
+        trim: q.trim ?? null,
+        vin: q.vin,
+        mileage: q.mileage ?? null,
+        price: q.price,
+        titleStatus: q.titleType,
+        location: q.location ?? null,
+        zip: q.zip ?? null,
+        photoUrl: q.photoUrl ?? null,
+        photos: q.photos ?? [],
+        postedAt: q.postedAt ?? null,
+        jdCleanTrade: g.effJd,
+        kbbLending: g.effKbb,
+        jdGap: g.jdGap,
+        kbbGap: g.kbbGap,
+        estValue: g.estValue,
+        estProfit: g.bestGap,
+        dealScore: dealScoreFor(g.bestGap, q.price, g.hot),
+        hot: g.hot,
+      });
+    }
+    if (deals.length) await ctx.runMutation(internal.listings.dealUpsert, { deals, notify: true });
+    await ctx.runMutation(internal.autoScan.setCarblyLimited, { limited });
+    const tag = limited ? " [CARBLY LIMIT — cooling down 3h]" : "";
+    console.log(`enrichTick batch=${pending.length} enriched=${enriched} qualified=${deals.length} hot=${hot}${tag}`);
+    return { enriched, qualified: deals.length, hot, limited, batch: pending.length };
   },
 });
 

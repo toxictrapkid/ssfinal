@@ -148,6 +148,35 @@ export default defineSchema({
     price: v.optional(v.number()),
   }).index("by_listing", ["listingId"]),
 
+  // Scrape queue — every buy-box candidate KSL listing, stored by the scrape
+  // cron BEFORE Carbly enrichment. The enrich cron drains pending rows when
+  // Carbly quota is available, so nothing is lost to the daily cap.
+  scrapeQueue: defineTable({
+    dedupeKey: v.string(),
+    source: v.string(),
+    sourceListingId: v.string(),
+    url: v.string(),
+    title: v.string(),
+    vin: v.string(),
+    year: v.optional(v.number()),
+    make: v.optional(v.string()),
+    model: v.optional(v.string()),
+    trim: v.optional(v.string()),
+    mileage: v.optional(v.number()),
+    price: v.number(),
+    titleType: v.string(), // "clean" | "branded"
+    zip: v.optional(v.string()),
+    location: v.optional(v.string()),
+    photoUrl: v.optional(v.string()),
+    photos: v.optional(v.array(v.string())),
+    postedAt: v.optional(v.number()),
+    scrapedAt: v.number(),
+    pending: v.boolean(), // true = needs Carbly enrichment (new or re-priced)
+    enrichedAt: v.optional(v.number()),
+  })
+    .index("by_dedupeKey", ["dedupeKey"])
+    .index("by_pending", ["pending", "scrapedAt"]),
+
   // Single-row scanner state — lets the cron back off after Carbly's daily
   // rate limit (so it doesn't scrape + bump the Carbly app every 2 min for a
   // full day once the cap is hit; it auto-resumes after the cooldown/reset).
