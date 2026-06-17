@@ -14,7 +14,7 @@
  * Only qualifying listings are written, so the feed is purely real deals. No
  * sandbox / Daytona / local machine — it's all server-side HTTP.
  */
-import { internalAction, action } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { fetchKslListings, brightDataConfigured, type KslSearchConfig } from "./lib/kslWebUnlocker";
@@ -197,6 +197,26 @@ async function scanBand(
   };
 }
 
+// After hitting Carbly's daily cap, the cron sleeps this long before probing
+// again — so it doesn't waste a scrape + bump the Carbly app every 2 minutes
+// for ~24h. It auto-resumes once Carbly's window resets.
+const CARBLY_COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3h
+
+export const getScanState = internalQuery({
+  args: {},
+  handler: async (ctx) => await ctx.db.query("scanState").first(),
+});
+
+export const setCarblyLimited = internalMutation({
+  args: { limited: v.boolean() },
+  handler: async (ctx, { limited }) => {
+    const row = await ctx.db.query("scanState").first();
+    const patch = { carblyLimitedAt: limited ? Date.now() : undefined, lastTickAt: Date.now() };
+    if (row) await ctx.db.patch(row._id, patch);
+    else await ctx.db.insert("scanState", patch);
+  },
+});
+
 /** Cron entrypoint — sweep one rotating grid cell per tick (full market ≈ every ~1.5h). */
 export const runScan = internalAction({
   args: {},
@@ -207,9 +227,19 @@ export const runScan = internalAction({
       console.log("autoScan paused (SCAN_ENABLED != true)");
       return { paused: true };
     }
+    // Cooldown: if we recently hit Carbly's daily cap, skip this tick entirely
+    // (no scrape, no Carbly login) until the window likely reset.
+    const st = await ctx.runQuery(internal.autoScan.getScanState, {});
+    if (st?.carblyLimitedAt && Date.now() - st.carblyLimitedAt < CARBLY_COOLDOWN_MS) {
+      const mins = Math.round((CARBLY_COOLDOWN_MS - (Date.now() - st.carblyLimitedAt)) / 60000);
+      console.log(`autoScan cooling down after Carbly limit (~${mins}m left)`);
+      return { coolingDown: true, minutesLeft: mins };
+    }
     const cell = GRID[Math.floor(Date.now() / 120000) % GRID.length];
     const res = await scanBand(ctx, cell.pmin, cell.pmax, cell.mmin, cell.mmax, true, cell.yearMin, cell.yearMax);
-    const tag = res.limited ? " [CARBLY LIMIT REACHED — backing off]" : "";
+    // Arm the cooldown when limited; clear it on any clean run.
+    await ctx.runMutation(internal.autoScan.setCarblyLimited, { limited: !!res.limited });
+    const tag = res.limited ? " [CARBLY LIMIT REACHED — cooling down 3h]" : "";
     console.log(`autoScan ${cell.yearMin}${cell.yearMax ? "-" + cell.yearMax : "+"} $${cell.pmin}-${cell.pmax} / ${cell.mmin}-${cell.mmax}mi:${tag}`, JSON.stringify(res));
     return res;
   },

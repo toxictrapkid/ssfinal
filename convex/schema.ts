@@ -148,6 +148,14 @@ export default defineSchema({
     price: v.optional(v.number()),
   }).index("by_listing", ["listingId"]),
 
+  // Single-row scanner state — lets the cron back off after Carbly's daily
+  // rate limit (so it doesn't scrape + bump the Carbly app every 2 min for a
+  // full day once the cap is hit; it auto-resumes after the cooldown/reset).
+  scanState: defineTable({
+    carblyLimitedAt: v.optional(v.number()), // when we last hit Carbly's "Limit Reached"
+    lastTickAt: v.optional(v.number()),
+  }),
+
   // Single-row app settings (spec §3)
   settings: defineTable({
     marginThreshold: v.number(), // default 1500
