@@ -291,9 +291,9 @@ export const scrapeTick = internalAction({
       yearMax: cell.yearMax,
     };
     const queued = { inserted: 0, repriced: 0, seen: 0 };
-    for (const [titleType, titleFilter] of [["clean", CLEAN_TITLE], ["branded", BRANDED_TITLE]] as const) {
+    const enqueue = async (cfg: KslSearchConfig, titleType: "clean" | "branded", where: string) => {
       try {
-        const listings = (await fetchKslListings({ ...base, titleType: titleFilter })).filter((l) => l.vin);
+        const listings = (await fetchKslListings(cfg)).filter((l) => l.vin);
         const items = listings.map((l) => kslToQueueItem(l, titleType));
         if (items.length) {
           const r = await ctx.runMutation(internal.scrapeQueue.enqueueScraped, { items });
@@ -302,10 +302,34 @@ export const scrapeTick = internalAction({
           queued.seen += r.seen;
         }
       } catch (e) {
-        console.log("scrapeTick error", titleType, String(e).slice(0, 120));
+        console.log("scrapeTick error", where, titleType, String(e).slice(0, 120));
+      }
+    };
+    // Deep coverage: the rotating grid cell (beats KSL's ~30-result cap over a full rotation).
+    for (const [titleType, titleFilter] of [["clean", CLEAN_TITLE], ["branded", BRANDED_TITLE]] as const) {
+      await enqueue({ ...base, titleType: titleFilter }, titleType, "grid");
+    }
+    // Fast-lane: catch BRAND-NEW posts immediately — newest-first across the whole
+    // buy-box (no price/mileage band) for both age profiles × both titles, so a
+    // freshly listed car hits the queue within ~2 min instead of a full rotation.
+    if (process.env.FASTLANE !== "false") {
+      for (const p of AGE_PROFILES) {
+        const wide: KslSearchConfig = {
+          ...BASE_CONFIG,
+          yearMin: p.yearMin,
+          yearMax: p.yearMax,
+          priceMin: 500,
+          priceMax: 65000,
+          mileageMin: 0,
+          mileageMax: p.yearMax ? 120000 : 110000,
+          sort: "NEWEST_TO_OLDEST",
+        };
+        for (const [titleType, titleFilter] of [["clean", CLEAN_TITLE], ["branded", BRANDED_TITLE]] as const) {
+          await enqueue({ ...wide, titleType: titleFilter }, titleType, "fastlane");
+        }
       }
     }
-    console.log(`scrapeTick ${cell.yearMin}${cell.yearMax ? "-" + cell.yearMax : "+"} $${cell.pmin}-${cell.pmax}/${cell.mmin}-${cell.mmax}mi:`, JSON.stringify(queued));
+    console.log(`scrapeTick grid[${cell.yearMin}${cell.yearMax ? "-" + cell.yearMax : "+"} $${cell.pmin}-${cell.pmax}/${cell.mmin}-${cell.mmax}mi] + fastlane:`, JSON.stringify(queued));
     return queued;
   },
 });
