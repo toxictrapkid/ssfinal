@@ -30,6 +30,7 @@ import type * as notifications from "../notifications.js";
 import type * as partsCosts from "../partsCosts.js";
 import type * as pipeline from "../pipeline.js";
 import type * as scoring from "../scoring.js";
+import type * as scrapeQueue from "../scrapeQueue.js";
 import type * as searches from "../searches.js";
 import type * as seed from "../seed.js";
 import type * as settings from "../settings.js";
@@ -63,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   partsCosts: typeof partsCosts;
   pipeline: typeof pipeline;
   scoring: typeof scoring;
+  scrapeQueue: typeof scrapeQueue;
   searches: typeof searches;
   seed: typeof seed;
   settings: typeof settings;
