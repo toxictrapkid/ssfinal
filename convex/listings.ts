@@ -156,6 +156,59 @@ export const markStale = internalMutation({
 });
 
 /**
+ * Touch lastSeenAt for every still-live listing we just re-scraped (even ones we
+ * didn't re-enrich), so the 48h markStale sweep only retires CARS THAT ACTUALLY
+ * VANISHED from KSL — not deals we simply skipped because their price was unchanged.
+ */
+export const touchSeen = internalMutation({
+  args: { keys: v.array(v.string()) },
+  handler: async (ctx, { keys }) => {
+    const now = Date.now();
+    let touched = 0;
+    for (const key of keys) {
+      const row = await ctx.db
+        .query("listings")
+        .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", key))
+        .first();
+      if (row && (row.status === "active" || row.status === "price_drop")) {
+        await ctx.db.patch(row._id, { lastSeenAt: now });
+        touched++;
+      }
+    }
+    return { touched };
+  },
+});
+
+/**
+ * Retire deals that are still listed but NO LONGER QUALIFY (e.g. the seller raised
+ * the price out of buy-box range). Marked "gone" so they drop out of the feed,
+ * with the truthful current price recorded in priceHistory.
+ */
+export const markDisqualified = internalMutation({
+  args: { items: v.array(v.object({ key: v.string(), price: v.number() })) },
+  handler: async (ctx, { items }) => {
+    const now = Date.now();
+    let marked = 0;
+    for (const { key, price } of items) {
+      const row = await ctx.db
+        .query("listings")
+        .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", key))
+        .first();
+      if (row && (row.status === "active" || row.status === "price_drop")) {
+        const patch: Record<string, unknown> = { status: "gone", lastSeenAt: now };
+        if (price !== row.price) {
+          patch.price = price;
+          patch.priceHistory = [...row.priceHistory, { price, at: now }];
+        }
+        await ctx.db.patch(row._id, patch);
+        marked++;
+      }
+    }
+    return { marked };
+  },
+});
+
+/**
  * Ranked deal feed. Defaults SHOW EVERYTHING (standing user override: never
  * pre-filter a deal away) — filters only narrow when the user asks.
  */

@@ -99,17 +99,23 @@ async function scanOne(
     .slice(0, MAX_ENRICH_PER_SWEEP);
 
   const deals: any[] = [];
+  const disqualified: { key: string; price: number }[] = []; // existing deals that no longer fit
   let enriched = 0;
   let hot = 0;
   let limited = false;
   for (const l of toEnrich) {
+    const key = dedupeKeyFor({ vin: l.vin, year: l.year, make: l.make, model: l.model, mileage: l.mileage, zip: l.zip, source: "ksl", sourceListingId: l.sourceListingId });
     if (enriched > 0) await new Promise((r) => setTimeout(r, CARBLY_DELAY_MS)); // pace Carbly
     const val = await carblyLookup(l.vin!, l.mileage, session);
     if (val.limited) { limited = true; break; } // Carbly daily limit hit -> stop, don't hammer
     enriched++; // count only real value pulls (not failed/limited lookups)
     if (val.jdCleanTrade == null && val.kbbLending == null) continue;
     const g = applyGapRule(l.price, val, { factor, branded: titleStatus === "branded" });
-    if (!g.qualifies) continue;
+    if (!g.qualifies) {
+      // A car we already had as a deal but that no longer fits (usually a price bump) -> retire it.
+      if (existing[key]) disqualified.push({ key, price: l.price });
+      continue;
+    }
     if (val.uuid) await assignToFolder(val.uuid, session); // file every qualifier into "KSL leads"
     if (g.hot) hot++;
     deals.push({
@@ -140,7 +146,10 @@ async function scanOne(
       hot: g.hot,
     });
   }
+  // Keep every still-live listing fresh so markStale only retires truly-vanished cars.
+  await ctx.runMutation(internal.listings.touchSeen, { keys: Array.from(keyByListing.keys()) });
   if (deals.length) await ctx.runMutation(internal.listings.dealUpsert, { deals, notify });
+  if (disqualified.length) await ctx.runMutation(internal.listings.markDisqualified, { items: disqualified });
   return { scraped: listings.length, enriched, qualified: deals.length, hot, limited };
 }
 
