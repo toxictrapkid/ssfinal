@@ -344,6 +344,9 @@ export const enrichTick = internalAction({
   args: {},
   handler: async (ctx) => {
     if (process.env.SCAN_ENABLED !== "true") return { paused: true };
+    // Carbly disabled by default — appraisal moved to Laser Appraiser (run externally).
+    // Set CARBLY_ENRICH=true only to re-enable the in-Convex Carbly enrichment.
+    if (process.env.CARBLY_ENRICH !== "true") return { disabled: true };
     if (!carblyConfigured()) return { error: "Carbly env not set" };
     const st = await ctx.runQuery(internal.autoScan.getScanState, {});
     if (st?.carblyLimitedAt && Date.now() - st.carblyLimitedAt < CARBLY_COOLDOWN_MS) {
