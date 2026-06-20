@@ -94,6 +94,9 @@ export default defineSchema({
     // standing user override 2026-06-12: drivetrain-issue listings are always
     // surfaced for manual review ("we are here to get deals not turn them away")
     mechanicSpecial: v.optional(v.boolean()),
+    // when the seller description was last fetched from the detail page (enrich.ts);
+    // the search page omits it, so this gates the per-listing Web-Unlocker detail fetch
+    descCheckedAt: v.optional(v.number()),
     // Carbly book-value enrichment (per-VIN, mileage-adjusted) + gap-rule output.
     // A listing qualifies for the feed when price is >= $1,000 under JD clean
     // trade-in OR KBB lending; HOT when under both. (user rule 2026-06-15)

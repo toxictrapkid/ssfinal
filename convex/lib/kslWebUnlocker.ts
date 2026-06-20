@@ -174,6 +174,53 @@ function mapRecord(r: Record<string, unknown>): KslRawListing | null {
   };
 }
 
+/**
+ * Fetch a single listing's seller DESCRIPTION through the Web Unlocker.
+ * The search page omits it, so "needs engine"/"blown motor"/"won't start" only
+ * appears here. Reads the description out of the detail page's RSC stream.
+ */
+export async function fetchKslDescription(listingId: string): Promise<string | null> {
+  const token = process.env.BRIGHTDATA_API_TOKEN;
+  if (!token) throw new Error("BRIGHTDATA_API_TOKEN not set");
+  const zone = process.env.BRIGHTDATA_ZONE ?? "web_unlocker1";
+  const url = `https://cars.ksl.com/listing/${listingId}`;
+  const resp = await fetch(BRD_API, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ zone, url, format: "raw" }),
+  });
+  if (!resp.ok) throw new Error(`Web Unlocker ${resp.status}: ${(await resp.text()).slice(0, 160)}`);
+  const html = await resp.text();
+  const low = html.toLowerCase();
+  if (low.includes("perimeterx") || low.includes("px2sz8xyop") || low.includes("access to this page has been denied")) {
+    throw new Error("PerimeterX block returned by Web Unlocker");
+  }
+  const stream = decodeRscStream(html) || html;
+  // Prefer the full CAR listing record, else fall back to any "description" key.
+  const re = /\{"id":\d+,"listingType":"CAR"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(stream)) !== null) {
+    const obj = extractObject(stream, m.index);
+    if (!obj) continue;
+    try {
+      const rec = JSON.parse(obj) as Record<string, unknown>;
+      if (typeof rec.description === "string" && rec.description.trim()) return rec.description;
+    } catch {
+      /* skip malformed record */
+    }
+  }
+  const dm = stream.match(/"description":"((?:[^"\\]|\\.)*)"/);
+  if (dm) {
+    try {
+      const v = JSON.parse('"' + dm[1] + '"') as string;
+      if (v.trim()) return v;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
 /** Fetch one KSL search page through the Web Unlocker and return private-party listings. */
 export async function fetchKslListings(cfg: KslSearchConfig): Promise<KslRawListing[]> {
   const token = process.env.BRIGHTDATA_API_TOKEN;
