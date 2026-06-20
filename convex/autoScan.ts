@@ -396,6 +396,10 @@ export const enrichTick = internalAction({
     // MARKETCHECK_KEY is set, depreciation-curve fallback otherwise). Then mark
     // the row enriched so it isn't reprocessed (unless its price changes).
     if (process.env.CARBLY_ENRICH !== "true") {
+      // When the Laser browser bridge is the appraiser, it owns the queue
+      // (looks up each VIN in the user's logged-in Laser session, posts book
+      // values to laser.appraise). Don't double-process here.
+      if (process.env.LASER_BRIDGE === "true") return { laserBridge: true };
       const pending = await ctx.runQuery(internal.scrapeQueue.pendingToEnrich, { limit: ENRICH_BATCH });
       if (!pending.length) return { pending: 0, promoted: 0 };
       const listings = pending.map((q: any) => ({
