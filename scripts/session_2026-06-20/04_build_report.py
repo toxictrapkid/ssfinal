@@ -368,6 +368,36 @@ p("CarHunter is private-party-only by design (dealer listings are hard-filtered)
 p("Data freshness:",H3)
 p("Platform snapshot data was last refreshed 2026-06-18 09:46 UTC. The 134-car scrape and all "
   "MarketCheck valuations were performed live during this session on 2026-06-20.")
+# ================= APPENDIX D: code for review =================
+E.append(PageBreak())
+p("Appendix D — Code &amp; Work for Review",H1); hr()
+p("All code produced this session, packaged so a fresh reviewer (or another chat) can audit it. "
+  "Full pack with a paste-ready reviewer brief: <font face='Courier'>scripts/session_2026-06-20/README.md</font>.")
+p("Bucket A — feature code committed on this branch",H3)
+table(["File","Commit","Purpose"],
+ [["convex/autoScan.ts","b499684","Laser-as-appraiser: scanBand scrapes to queue, no Carbly unless CARBLY_ENRICH=true"],
+  ["convex/enrich.ts","beb4f90","Description enrichment + mechanicSpecial flagging"],
+  ["convex/lib/kslWebUnlocker.ts","beb4f90","Convex-side Web Unlocker helper"],
+  ["convex/schema.ts","beb4f90","+ description / mechanicSpecial fields"],
+  ["scrapers/ksl_detail.py","e546fe0","Detail-page description + classify_drivetrain()"],
+  ["scripts/find_mechanic_specials.py","e546fe0","Feed-query + fetch + rank harness"]],
+ [2.2*inch,0.8*inch,3.3*inch])
+p("Bucket B — session analysis scripts (scripts/session_2026-06-20/)",H3)
+table(["File","Purpose"],
+ [["01_scrape_bands.py","Live KSL band-sweep via Bright Data Web Unlocker -&gt; 134 cars"],
+  ["valuation_agent_prompt.md","Exact instruction given to the 4 parallel valuation agents"],
+  ["02_merge_rank.py","Merge valuations, rank by spread, export CSV"],
+  ["03_jd_verify.py","Verify spread vs real J.D. clean trade-in"],
+  ["04_build_report.py","Builds this PDF (reportlab)"],
+  ["README.md","Code inventory, methodology, limitations, reviewer brief"]],
+ [2.0*inch,4.3*inch])
+p("What a reviewer should check",H3)
+bullets([
+ "autoScan.ts: does the Laser-mode change remove Carbly from the scrape path without breaking runScan / scanNow?",
+ "Spread math in 02/03 matches scoreMath.ts + reconRules.ts ($400 recon + $400 fees; HOT &ge; $1,500).",
+ "The MarketCheck national-median estValue is a fair proxy for the product's marketcheck.ts comp anchor.",
+ "Band-sweep dedup/filter is sound; J.D. verification VIN join is correct; no overstated claims in this report.",
+])
 sp(8)
 p("Generated 2026-06-20 by Claude Code for zaki@zakimohamed.com. Credentials masked; "
   "this report contains no live secrets.",SMALL)
