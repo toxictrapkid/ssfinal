@@ -16,6 +16,7 @@ import type * as daytona from "../daytona.js";
 import type * as debug from "../debug.js";
 import type * as enrich from "../enrich.js";
 import type * as http from "../http.js";
+import type * as laser from "../laser.js";
 import type * as lib_alertTransports from "../lib/alertTransports.js";
 import type * as lib_carblyClient from "../lib/carblyClient.js";
 import type * as lib_daytonaClient from "../lib/daytonaClient.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   debug: typeof debug;
   enrich: typeof enrich;
   http: typeof http;
+  laser: typeof laser;
   "lib/alertTransports": typeof lib_alertTransports;
   "lib/carblyClient": typeof lib_carblyClient;
   "lib/daytonaClient": typeof lib_daytonaClient;
