@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 const MAX_BATCH = 200;
 
@@ -73,6 +73,46 @@ function json(payload: unknown, status: number): Response {
   });
 }
 
+// --- Laser bridge endpoints (CORS-enabled) ---------------------------------
+// A page-context script on the Laser site calls these with plain fetch (no
+// browser extension needed). Both delegate to convex/laser.ts and are gated by
+// the INGEST_SECRET there.
+const CORS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+function jsonCors(payload: unknown, status: number): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS },
+  });
+}
+const corsPreflight = httpAction(async () => new Response(null, { status: 204, headers: CORS }));
+
+const laserPending = httpAction(async (ctx, request) => {
+  const url = new URL(request.url);
+  const res = await ctx.runQuery(api.laser.pendingVins, {
+    secret: url.searchParams.get("secret") ?? "",
+    limit: Number(url.searchParams.get("limit") ?? "8"),
+  });
+  return jsonCors(res, 200);
+});
+
+const laserValues = httpAction(async (ctx, request) => {
+  let body: any;
+  try { body = await request.json(); } catch { return jsonCors({ error: "bad json" }, 400); }
+  const res = await ctx.runAction(api.laser.appraise, {
+    secret: body?.secret ?? "",
+    values: Array.isArray(body?.values) ? body.values : [],
+  });
+  return jsonCors(res, 200);
+});
+
 const http = httpRouter();
 http.route({ path: "/ingest", method: "POST", handler: ingest });
+http.route({ path: "/laser/pending", method: "GET", handler: laserPending });
+http.route({ path: "/laser/pending", method: "OPTIONS", handler: corsPreflight });
+http.route({ path: "/laser/values", method: "POST", handler: laserValues });
+http.route({ path: "/laser/values", method: "OPTIONS", handler: corsPreflight });
 export default http;
