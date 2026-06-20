@@ -1,18 +1,18 @@
 /**
  * Automated deal scanner — runs entirely inside Convex (cron-driven, 24/7).
  *
- * Each tick sweeps one price band (rotating, so the whole market is covered ~hourly),
- * for BOTH clean-title and branded-title listings, then enriches each NEW/price-changed
- * VIN with Carbly (JD clean trade-in + KBB lending, mileage-adjusted) and keeps the ones
- * that pass the buy-box (user rule 2026-06-15):
+ * APPRAISAL = Laser Appraiser (external), the main appraisal function. The scan
+ * crons push every buy-box candidate straight into the scrape queue (NO Carbly);
+ * Laser drains that queue, appraises each VIN (JD clean trade-in + KBB lending),
+ * and posts the valued listings back via POST /ingest. The scoring pass
+ * (convex/scoring.ts) then ranks them using MarketCheck comps.
  *
- *   filters : 2016+ (< 10 yrs), <= 110k miles, FSBO only
- *   qualify : price <= max(JD_clean_trade, KBB_lending) + $500   (clean title)
- *             ...same vs 70% of those books for salvage/rebuilt
- *   HOT     : way below BOTH books (>= $1,500 under each)
+ * Carbly is LEGACY and OFF by default. The in-Convex Carbly enrichment runs only
+ * when CARBLY_ENRICH="true"; otherwise the scan path NEVER logs into Carbly, so a
+ * dead Carbly session can no longer abort scraping (the 2026-06-18 outage cause).
  *
- * Only qualifying listings are written, so the feed is purely real deals. No
- * sandbox / Daytona / local machine — it's all server-side HTTP.
+ *   buy-box : 2016+ (< 10 yrs), <= 110k miles, FSBO only (older profile to 120k)
+ *   No sandbox / Daytona / local machine — it's all server-side HTTP.
  */
 import { internalAction, internalMutation, internalQuery, action } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -178,6 +178,34 @@ async function scanOne(
   return { scraped: listings.length, enriched, qualified: deals.length, hot, limited };
 }
 
+/**
+ * Scrape a config (clean + branded) straight into the scrape queue — NO Carbly.
+ * This is the Laser-mode path: Laser Appraiser drains the queue and appraises
+ * externally, posting valued listings back via /ingest.
+ */
+async function enqueueBand(
+  ctx: { runMutation: any },
+  base: KslSearchConfig
+): Promise<{ inserted: number; repriced: number; seen: number; scraped: number }> {
+  const out = { inserted: 0, repriced: 0, seen: 0, scraped: 0 };
+  for (const [titleType, titleFilter] of [["clean", CLEAN_TITLE], ["branded", BRANDED_TITLE]] as const) {
+    try {
+      const listings = (await fetchKslListings({ ...base, titleType: titleFilter })).filter((l) => l.vin);
+      out.scraped += listings.length;
+      const items = listings.map((l) => kslToQueueItem(l, titleType));
+      if (items.length) {
+        const r = await ctx.runMutation(internal.scrapeQueue.enqueueScraped, { items });
+        out.inserted += r.inserted;
+        out.repriced += r.repriced;
+        out.seen += r.seen;
+      }
+    } catch (e) {
+      console.log("enqueueBand error", titleType, String(e).slice(0, 120));
+    }
+  }
+  return out;
+}
+
 /** Sweep one grid cell: clean-title (full books) + branded-title (70% books). */
 async function scanBand(
   ctx: { runQuery: any; runMutation: any },
@@ -190,6 +218,21 @@ async function scanBand(
   yearMax?: number
 ): Promise<SweepResult> {
   if (!brightDataConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "BRIGHTDATA_API_TOKEN not set" };
+
+  // Laser mode (DEFAULT): appraisal is done externally by Laser Appraiser, which
+  // drains the scrape queue and posts valued listings back via POST /ingest. So
+  // just scrape this band straight into the queue — never log into Carbly. This
+  // is what stops a dead Carbly session from ever blocking the scrape again.
+  if (process.env.CARBLY_ENRICH !== "true") {
+    const cell: KslSearchConfig = {
+      ...BASE_CONFIG, priceMin, priceMax, mileageMin, mileageMax,
+      yearMin: yearMin ?? CURRENT_YEAR - 10, yearMax,
+    };
+    const q = await enqueueBand(ctx, cell);
+    return { scraped: q.scraped, enriched: 0, qualified: 0, hot: 0 };
+  }
+
+  // --- Legacy Carbly path (only when CARBLY_ENRICH="true") ---
   if (!carblyConfigured()) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "Carbly env not set" };
   const session = await carblyLogin(); // fresh login each run -> reclaims the single-device slot
   if (!session) return { scraped: 0, enriched: 0, qualified: 0, hot: 0, error: "Carbly login failed" };
