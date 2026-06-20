@@ -378,18 +378,57 @@ export const scrapeTick = internalAction({
 });
 
 /**
- * Deferred enrichment — runs every 2 min, drains pending queue rows through
- * Carbly (JD clean trade + KBB lending), applies the gap rule, files qualifiers
- * into "KSL leads" + texts Contact-Now deals. Honors the 3h cooldown after the
- * daily cap, so it auto-resumes draining the backlog once Carbly resets.
+ * Deferred enrichment — runs every 2 min. DEFAULT (auto) mode drains pending
+ * queue rows straight into the feed (upsertFromScrape -> schedules scoring via
+ * MarketCheck comps / depreciation-curve fallback); fully self-contained, no
+ * Carbly and no external Laser process. Legacy Carbly enrichment (JD clean
+ * trade + KBB lending, gap rule, lead filing, Contact-Now texts, 3h cooldown)
+ * runs only when CARBLY_ENRICH="true".
  */
 export const enrichTick = internalAction({
   args: {},
   handler: async (ctx) => {
     if (process.env.SCAN_ENABLED !== "true") return { paused: true };
-    // Carbly disabled by default — appraisal moved to Laser Appraiser (run externally).
-    // Set CARBLY_ENRICH=true only to re-enable the in-Convex Carbly enrichment.
-    if (process.env.CARBLY_ENRICH !== "true") return { disabled: true };
+
+    // DEFAULT (auto) mode — fully self-contained, no Carbly, no external Laser.
+    // Drain pending queue rows straight into the feed: each becomes a listing via
+    // upsertFromScrape, which schedules scoring (MarketCheck comps when a
+    // MARKETCHECK_KEY is set, depreciation-curve fallback otherwise). Then mark
+    // the row enriched so it isn't reprocessed (unless its price changes).
+    if (process.env.CARBLY_ENRICH !== "true") {
+      const pending = await ctx.runQuery(internal.scrapeQueue.pendingToEnrich, { limit: ENRICH_BATCH });
+      if (!pending.length) return { pending: 0, promoted: 0 };
+      const listings = pending.map((q: any) => ({
+        source: q.source,
+        sourceListingId: q.sourceListingId,
+        url: q.url,
+        title: q.title,
+        price: q.price,
+        mileage: q.mileage ?? null,
+        year: q.year ?? null,
+        make: q.make ?? null,
+        model: q.model ?? null,
+        trim: q.trim ?? null,
+        vin: q.vin ?? null,
+        titleStatus: q.titleType === "branded" ? "rebuilt" : "clean",
+        sellerType: "private",
+        location: q.location ?? null,
+        photoUrl: q.photoUrl ?? null,
+        photos: q.photos ?? [],
+        description: null,
+        zip: q.zip ?? null,
+        postedAt: q.postedAt ?? null,
+        distanceMiles: null,
+      }));
+      const res = await ctx.runMutation(internal.listings.upsertFromScrape, { listings });
+      for (const q of pending) {
+        await ctx.runMutation(internal.scrapeQueue.markEnriched, { dedupeKey: q.dedupeKey, price: q.price });
+      }
+      console.log("enrichTick(auto):", JSON.stringify({ promoted: pending.length, ...res }));
+      return { promoted: pending.length, ...res };
+    }
+
+    // --- Legacy Carbly enrichment (only when CARBLY_ENRICH="true") ---
     if (!carblyConfigured()) return { error: "Carbly env not set" };
     const st = await ctx.runQuery(internal.autoScan.getScanState, {});
     if (st?.carblyLimitedAt && Date.now() - st.carblyLimitedAt < CARBLY_COOLDOWN_MS) {
