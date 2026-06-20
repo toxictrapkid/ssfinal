@@ -12,3 +12,7 @@ test-results/
 data/.partscosts_batches/
 web/tsconfig.tsbuildinfo
 .vercel
+
+# ad-hoc scrape/feed data exports (transient deliverables, not source)
+platform_*.csv
+platform_*.json
