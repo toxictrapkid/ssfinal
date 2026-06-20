@@ -1,0 +1,26 @@
+rank,price,mileage,year,make,model,trim,titleStatus,estValue,belowBook,estProfit,dealScore,hot,valuationSource,carblyJdGap,location,daysListed,status,vin,sourceListingId,url
+1,9500,31624,2023,Ford,Mustang Mach-E,Premium,branded,19198,9698,9698,100.0,True,carbly,9698,"West Valley City, UT",12,active,3FMTK3SS8PMA13007,10545956,https://cars.ksl.com/listing/10545956
+2,5000,80000,2016,Toyota,RAV4,LE,branded,10833,5833,5833,100.0,True,carbly,5833,"Kearns, UT",5,active,JTMBFREV8GJ078479,10635647,https://cars.ksl.com/listing/10635647
+3,4000,96123,2017,Volkswagen,Golf Alltrack,S,branded,7262,3262,3262,100.0,True,carbly,3262,"Eagle Mountain, UT",13,active,3VWM17AU2HM521364,10622302,https://cars.ksl.com/listing/10622302
+4,4900,57464,2017,Nissan,Sentra,SV,clean,7545,2645,2645,100.0,True,carbly,1363,"Millcreek, UT",1,active,3N1AB7AP7HY346232,10641505,https://cars.ksl.com/listing/10641505
+5,4000,96500,2016,GMC,Terrain,SLE,branded,6545,2545,2545,100.0,True,carbly,2545,"Paradise, UT",0,active,2GKFLTEK7G6302405,10639033,https://cars.ksl.com/listing/10639033
+6,10995,72486,2018,Dodge,Charger,Police,clean,13300,2305,2305,71.0,False,carbly,2305,"Draper, UT",11,active,2C3CDXAG7JH164529,10626293,https://cars.ksl.com/listing/10626293
+7,2300,65043,2016,Hyundai,Veloster,Turbo,branded,4052,1752,1752,100.0,True,carbly,1752,"Ogden, UT",25,active,KMHTC6AEXGU252290,10603910,https://cars.ksl.com/listing/10603910
+8,10750,59500,2017,Jeep,Renegade,Latitude,clean,12200,1450,1450,78.0,True,carbly,1450,"Lindon, UT",16,active,ZACCJBBB2HPG33836,10616538,https://cars.ksl.com/listing/10616538
+9,11999,64000,2019,Jeep,Renegade,Latitude,clean,13320,1321,1321,61.0,False,carbly,826,"Harrisville, UT",11,active,ZACNJBBB8KPK68639,10626031,https://cars.ksl.com/listing/10626031
+10,9500,95000,2016,Hyundai,Tucson,Sport,clean,10700,1200,1200,63.0,False,carbly,1200,"Erda, UT",17,active,KM8J33A2XGU199442,10579453,https://cars.ksl.com/listing/10579453
+11,10500,90000,2017,Audi,A3,1.4T Premium,clean,11700,1200,1200,61.0,False,carbly,1200,"Grantsville, UT",12,active,WAUUPBFFXHA093519,10624332,https://cars.ksl.com/listing/10624332
+12,6888,98000,2016,Ford,Escape,SE,clean,7650,762,762,61.0,False,carbly,762,"Salt Lake City, UT",20,active,1FMCU0GXXGUC27828,10610780,https://cars.ksl.com/listing/10610780
+13,10000,96686,2016,Chevrolet,Impala,LS Fleet,clean,10625,625,625,56.0,False,carbly,625,"Logan, UT",15,active,2G1WA5E35G1165153,10619073,https://cars.ksl.com/listing/10619073
+14,5500,35000,2017,Hyundai,Elantra,SE,branded,5919,419,419,58.0,False,carbly,,"Murray, UT",4,active,KMHD84LF3HU369971,10637139,https://cars.ksl.com/listing/10637139
+15,8500,72803,2020,Chevrolet,Equinox,Sport,branded,8890,390,390,55.0,False,carbly,390,"Millcreek, UT",14,active,2GNAXHEV3L6216723,10621218,https://cars.ksl.com/listing/10621218
+16,9000,51000,2019,Nissan,Frontier,,branded,9380,380,380,54.0,False,carbly,380,"South Jordan, UT",7,active,1N6BD0CT0KN747796,10599875,https://cars.ksl.com/listing/10599875
+17,5000,36260,2017,Fiat,500e,Base,clean,4988,-12,-12,50.0,False,carbly,-12,"Grantsville, UT",28,active,3C3CFFGEXHT682338,10598104,https://cars.ksl.com/listing/10598104
+18,11900,90000,2018,Mazda,Mazda3,Grand Touring,clean,11875,-25,-25,50.0,False,carbly,-25,"Tooele, UT",6,active,3MZBN1M35JM180723,10638973,https://cars.ksl.com/listing/10638973
+19,5999,80675,2018,Ford,Escape,SEL,branded,5845,-154,-154,47.0,False,carbly,-154,"Murray, UT",5,active,1FMCU9HD5JUC92506,10634930,https://cars.ksl.com/listing/10634930
+20,4595,95850,2016,Fiat,500,Pop,clean,4313,-282,-282,44.0,False,carbly,-282,"Duchesne, UT",10,active,3C3CFFAR2GT201802,10520414,https://cars.ksl.com/listing/10520414
+21,11200,81253,2018,Ford,Explorer,Police Interceptor,clean,10750,-450,-450,46.0,False,carbly,-450,"Roosevelt, UT",6,active,1FM5K8AT5JGA27190,10633520,https://cars.ksl.com/listing/10633520
+22,5500,69820,2017,Fiat,500e,Base,clean,4988,-512,-512,41.0,False,carbly,-512,"Layton, UT",12,active,3C3CFFGE7HT579930,10624113,https://cars.ksl.com/listing/10624113
+23,11500,95500,2016,Cadillac,ATS,,clean,10950,-550,-550,45.0,False,carbly,-550,"Vernal, UT",10,active,1G6AB5RX4G0123602,10627043,https://cars.ksl.com/listing/10627043
+24,11000,93330,2018,Subaru,Crosstrek,Limited,branded,10430,-570,-570,45.0,False,carbly,-570,"Salt Lake City, UT",12,active,JF2GTAMC6JH229559,10623810,https://cars.ksl.com/listing/10623810
+25,11899,21799,2022,Hyundai,Elantra,SEL,branded,11270,-629,-629,45.0,False,carbly,-629,"Salt Lake City, UT",19,active,KMHLM4AG6NU337708,10352862,https://cars.ksl.com/listing/10352862
