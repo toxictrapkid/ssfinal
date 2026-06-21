@@ -223,6 +223,7 @@ export const applyScore = internalMutation({
       (listing.lastAlertPrice === undefined || listing.price < listing.lastAlertPrice)
     ) {
       await ctx.scheduler.runAfter(0, internal.alerts.sendHotAlert, { listingId });
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSlackAlert, { listingId });
     }
   },
 });

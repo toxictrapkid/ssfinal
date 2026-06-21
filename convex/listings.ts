@@ -485,9 +485,11 @@ export const dealUpsert = internalMutation({
         });
         result.inserted++;
         if (d.hot) result.hot++;
-        // Text the user for NEW Contact-Now deals (only when notify=true: cron, not backfill)
+        // Alert on NEW Contact-Now deals (notify=true: live cron, not backfill):
+        // SMS via Mobile Text Alerts + Slack via the Incoming Webhook.
         if (notify && d.hot) {
           await ctx.scheduler.runAfter(0, internal.notifications.sendDealSms, { listingId: id });
+          await ctx.scheduler.runAfter(0, internal.notifications.sendSlackAlert, { listingId: id });
         }
         continue;
       }
