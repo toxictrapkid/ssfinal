@@ -80,13 +80,13 @@ export const appraise = action({
     const rows = await ctx.runQuery(internal.laser.queueByKeys, {
       keys: values.map((x) => x.dedupeKey),
     });
-    const byKey = new Map(rows.map((r: any) => [r.dedupeKey, r]));
+    const byKey = new Map<string, any>(rows.map((r: any): [string, any] => [r.dedupeKey, r]));
 
     const deals: any[] = [];
     let appraised = 0;
     let hot = 0;
     for (const val of values) {
-      const q = byKey.get(val.dedupeKey);
+      const q: any = byKey.get(val.dedupeKey);
       if (!q) continue;
       appraised++;
       // mark the row done so it isn't re-served (re-flagged pending on a price change)

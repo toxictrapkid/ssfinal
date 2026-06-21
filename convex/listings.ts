@@ -449,7 +449,7 @@ export const dealUpsert = internalMutation({
         carblyJdGap: d.jdGap ?? undefined,
         carblyKbbGap: d.kbbGap ?? undefined,
         carblyCheckedAt: now,
-        valuationSource: "carbly",
+        valuationSource: "laser",
       };
       const existing = await ctx.db
         .query("listings")

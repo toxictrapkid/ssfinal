@@ -387,7 +387,7 @@ export const scrapeTick = internalAction({
  */
 export const enrichTick = internalAction({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<any> => {
     if (process.env.SCAN_ENABLED !== "true") return { paused: true };
 
     // DEFAULT (auto) mode — fully self-contained, no Carbly, no external Laser.
@@ -400,7 +400,7 @@ export const enrichTick = internalAction({
       // (looks up each VIN in the user's logged-in Laser session, posts book
       // values to laser.appraise). Don't double-process here.
       if (process.env.LASER_BRIDGE === "true") return { laserBridge: true };
-      const pending = await ctx.runQuery(internal.scrapeQueue.pendingToEnrich, { limit: ENRICH_BATCH });
+      const pending: any[] = await ctx.runQuery(internal.scrapeQueue.pendingToEnrich, { limit: ENRICH_BATCH });
       if (!pending.length) return { pending: 0, promoted: 0 };
       const listings = pending.map((q: any) => ({
         source: q.source,
@@ -424,7 +424,7 @@ export const enrichTick = internalAction({
         postedAt: q.postedAt ?? null,
         distanceMiles: null,
       }));
-      const res = await ctx.runMutation(internal.listings.upsertFromScrape, { listings });
+      const res: any = await ctx.runMutation(internal.listings.upsertFromScrape, { listings });
       for (const q of pending) {
         await ctx.runMutation(internal.scrapeQueue.markEnriched, { dedupeKey: q.dedupeKey, price: q.price });
       }
@@ -439,7 +439,7 @@ export const enrichTick = internalAction({
       const mins = Math.round((CARBLY_COOLDOWN_MS - (Date.now() - st.carblyLimitedAt)) / 60000);
       return { coolingDown: true, minutesLeft: mins };
     }
-    const pending = await ctx.runQuery(internal.scrapeQueue.pendingToEnrich, { limit: ENRICH_BATCH });
+    const pending: any[] = await ctx.runQuery(internal.scrapeQueue.pendingToEnrich, { limit: ENRICH_BATCH });
     if (!pending.length) return { pending: 0 };
     const session = await carblyLogin();
     if (!session) return { error: "Carbly login failed" };
