@@ -489,8 +489,13 @@ export const dealUpsert = internalMutation({
         // SMS via Mobile Text Alerts + Slack via the Incoming Webhook.
         if (notify && d.hot) {
           await ctx.scheduler.runAfter(0, internal.notifications.sendDealSms, { listingId: id });
-          await ctx.scheduler.runAfter(0, internal.notifications.sendSlackAlert, { listingId: id });
         }
+        // Airtable CRM sync (new lead). syncDeal fires the rich HOT Slack alert
+        // (with the Airtable record link) when notifyHot is true.
+        await ctx.scheduler.runAfter(0, internal.airtable.syncDeal, {
+          listingId: id,
+          notifyHot: !!(notify && d.hot),
+        });
         continue;
       }
       const priceChanged = d.price !== existing.price;
@@ -518,6 +523,9 @@ export const dealUpsert = internalMutation({
       await ctx.db.patch(existing._id, patch);
       result.updated++;
       if (d.hot) result.hot++;
+      // Airtable CRM sync (lead updated). Debounced inside syncDeal; updates do
+      // not re-fire the HOT Slack alert (only new HOT leads do).
+      await ctx.scheduler.runAfter(0, internal.airtable.syncDeal, { listingId: existing._id, notifyHot: false });
     }
     return result;
   },

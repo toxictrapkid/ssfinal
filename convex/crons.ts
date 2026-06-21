@@ -21,4 +21,16 @@ crons.daily(
   {}
 );
 
+// Every 5 minutes: surface tool/integration issues unresolved past the 15-min
+// grace window to Slack #carhunter-errors (integration rule: no silent failures).
+crons.interval("tool issue watch", { minutes: 5 }, internal.airtable.toolIssueWatch, {});
+
+// Daily: end-of-day desk summary to Slack #carhunter-daily-desk.
+crons.daily(
+  "end of day summary",
+  { hourUTC: 1, minuteUTC: 0 }, // 6pm MT
+  internal.airtable.endOfDay,
+  {}
+);
+
 export default crons;

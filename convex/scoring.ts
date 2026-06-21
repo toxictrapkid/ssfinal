@@ -218,13 +218,16 @@ export const applyScore = internalMutation({
     // below the price we last alerted at. Mechanic specials alert regardless
     // of profit (standing user override — manual review). recordAlert
     // re-checks the dedupe condition transactionally.
-    if (
+    const newHotAlert =
       (fields.hot || fields.mechanicSpecial) &&
-      (listing.lastAlertPrice === undefined || listing.price < listing.lastAlertPrice)
-    ) {
+      (listing.lastAlertPrice === undefined || listing.price < listing.lastAlertPrice);
+    if (newHotAlert) {
       await ctx.scheduler.runAfter(0, internal.alerts.sendHotAlert, { listingId });
-      await ctx.scheduler.runAfter(0, internal.notifications.sendSlackAlert, { listingId });
     }
+    // Airtable CRM sync on every score/value change (debounced inside syncDeal).
+    // When this is a new HOT alert, syncDeal also fires the richer Slack message
+    // (with the Airtable record link) instead of the old basic alert.
+    await ctx.scheduler.runAfter(0, internal.airtable.syncDeal, { listingId, notifyHot: newHotAlert });
   },
 });
 

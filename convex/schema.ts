@@ -106,6 +106,16 @@ export default defineSchema({
     carblyKbbGap: v.optional(v.number()), // kbbLending - price
     carblyCheckedAt: v.optional(v.number()),
     valuationSource: v.optional(v.string()), // "carbly" | "curve" | ...
+    // Extra book values for the Airtable Deals mapping. Not captured by the
+    // Carbly/Laser bridge yet (JD clean + KBB only), so null until a value
+    // source fills them — synced through to Airtable when present.
+    jdFullRetail: v.optional(v.number()),
+    baseMmr: v.optional(v.number()),
+    // Airtable CRM sync (one-way CarHunter -> Airtable, upsert by Lead ID).
+    // airtableSyncHash debounces: re-push only when the mapped fields change.
+    airtableRecordId: v.optional(v.string()),
+    airtableSyncedAt: v.optional(v.number()),
+    airtableSyncHash: v.optional(v.string()),
   })
     .index("by_dedupeKey", ["dedupeKey"])
     .index("by_score", ["dealScore"])
@@ -219,4 +229,36 @@ export default defineSchema({
     ),
     refreshedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  // Tool/integration problems surfaced to the Airtable "Tool Issues" table and,
+  // when unresolved past the grace window, to Slack #carhunter-errors.
+  // dedupeKey collapses repeats of the same failure into one open row.
+  toolIssues: defineTable({
+    dedupeKey: v.string(), // e.g. "airtable:sync:<listingId>" or "laser:expired"
+    tool: v.string(), // "carhunter"|"laser"|"carfax"|"carpart"|"airtable"|"slack"|"sync"
+    severity: v.string(), // "info"|"warn"|"error"
+    summary: v.string(),
+    detail: v.optional(v.string()),
+    listingId: v.optional(v.id("listings")),
+    status: v.string(), // "open" | "resolved"
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    count: v.number(),
+    notifiedAt: v.optional(v.number()), // when Slack #errors was alerted
+    resolvedAt: v.optional(v.number()),
+    airtableRecordId: v.optional(v.string()),
+  })
+    .index("by_dedupeKey", ["dedupeKey"])
+    .index("by_status", ["status"]),
+
+  // Compact append log of every Airtable sync attempt (integration rule 6:
+  // "log every sync attempt", rule 8: "do not silently fail"). Self-pruned to
+  // the most recent rows so it never grows unbounded.
+  syncLog: defineTable({
+    entity: v.string(), // "deal"
+    listingId: v.optional(v.id("listings")),
+    action: v.string(), // "create" | "update" | "skip" | "error"
+    detail: v.optional(v.string()),
+    at: v.number(),
+  }).index("by_at", ["at"]),
 });

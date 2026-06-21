@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as airtable from "../airtable.js";
 import type * as alerts from "../alerts.js";
 import type * as autoScan from "../autoScan.js";
 import type * as comps from "../comps.js";
@@ -34,6 +35,7 @@ import type * as scrapeQueue from "../scrapeQueue.js";
 import type * as searches from "../searches.js";
 import type * as seed from "../seed.js";
 import type * as settings from "../settings.js";
+import type * as slack from "../slack.js";
 
 import type {
   ApiFromModules,
@@ -42,6 +44,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  airtable: typeof airtable;
   alerts: typeof alerts;
   autoScan: typeof autoScan;
   comps: typeof comps;
@@ -68,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   searches: typeof searches;
   seed: typeof seed;
   settings: typeof settings;
+  slack: typeof slack;
 }>;
 
 /**
