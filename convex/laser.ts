@@ -16,7 +16,7 @@
 import { action, query, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { applyGapRule, BRANDED_FACTOR } from "./lib/carblyClient";
+import { applyGapRule, BRANDED_FACTOR } from "./lib/gapRule";
 
 function authed(secret: string | undefined): boolean {
   return !!secret && secret === process.env.INGEST_SECRET;
