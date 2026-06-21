@@ -25,6 +25,10 @@ crons.daily(
 // grace window to Slack #carhunter-errors (integration rule: no silent failures).
 crons.interval("tool issue watch", { minutes: 5 }, internal.airtable.toolIssueWatch, {});
 
+// Every 30 minutes: feed-freshness watchdog — if active searches stop producing
+// new listings (e.g. a scrape/pagination failure), raise a Tool Issue -> Slack.
+crons.interval("feed freshness watch", { minutes: 30 }, internal.airtable.feedFreshnessWatch, {});
+
 // Daily: end-of-day desk summary to Slack #carhunter-daily-desk.
 crons.daily(
   "end of day summary",

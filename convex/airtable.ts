@@ -347,3 +347,50 @@ export const endOfDay = internalAction({
     return { ok: true };
   },
 });
+
+/** Newest ingested listing + whether any search is active (feed-freshness input). */
+export const feedFreshness = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const activeSearches = await ctx.db
+      .query("searches")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+    const rows = await ctx.db
+      .query("listings")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
+    let newestAt = 0;
+    for (const l of rows) if (l.firstSeenAt > newestAt) newestAt = l.firstSeenAt;
+    return { activeSearches: activeSearches.length, newestAt, count: rows.length };
+  },
+});
+
+/**
+ * Cron: feed-freshness watchdog. If searches are active but no new listing has
+ * been ingested in FEED_STALE_HOURS (default 3), the scrape has silently
+ * stopped — this is exactly the failure a wrong page index + stop-on-duplicate
+ * would cause. Raise a Tool Issue (escalated to Slack #errors by toolIssueWatch)
+ * and auto-resolve it once new listings flow again. No silent failures.
+ */
+export const feedFreshnessWatch = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const staleHours = Number(process.env.FEED_STALE_HOURS ?? "3");
+    const f = await ctx.runQuery(internal.airtable.feedFreshness, {});
+    if (f.activeSearches === 0) return { ok: true, reason: "no active searches" };
+    const ageHours = f.newestAt ? (Date.now() - f.newestAt) / 3.6e6 : Infinity;
+    if (ageHours > staleHours) {
+      await ctx.runMutation(internal.airtable.raiseToolIssue, {
+        dedupeKey: "feed:stale",
+        tool: "carhunter",
+        severity: "error",
+        summary: `No new listings ingested in ${ageHours === Infinity ? "a long time" : ageHours.toFixed(1) + "h"} — scrape may be down`,
+        detail: `Active searches: ${f.activeSearches}; active listings: ${f.count}; threshold ${staleHours}h. Check the KSL scraper / Bright Data token / pagination (a page-index bug can silently collapse the feed to one page).`,
+      });
+      return { stale: true, ageHours };
+    }
+    await ctx.runMutation(internal.airtable.resolveToolIssue, { dedupeKey: "feed:stale" });
+    return { stale: false, ageHours };
+  },
+});

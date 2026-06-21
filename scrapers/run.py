@@ -27,10 +27,27 @@ import requests
 
 import facebook
 import ksl
+import ksl_browser  # Playwright is lazy-imported inside ksl_browser.run, so this is safe
 import ksl_unlocker
 from facebook import ScraperDisabled
 
 log = logging.getLogger("carhunter.run")
+
+
+def _config_bool(config: dict, key: str, env_name: str, default: bool = False) -> bool:
+    value = config.get(key)
+    if value is None:
+        value = os.environ.get(env_name)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _ksl_mode(config: dict) -> str:
+    """direct | unlocker | browser | auto. 'auto' preserves prior behavior."""
+    return str(config.get("kslMode") or os.environ.get("KSL_SCRAPER_MODE") or "auto").lower()
 
 BATCH_SIZE = 50
 POST_RETRIES = 3
@@ -102,9 +119,24 @@ def run_source(source: str, config: dict, args: argparse.Namespace) -> list[dict
         # requests path remains for offline fixtures (--items-file).
         if args.items_file:
             return ksl.run(config, max_pages=args.max_pages, items_file=args.items_file)
-        if os.environ.get("BRIGHTDATA_API_TOKEN"):
+        mode = _ksl_mode(config)
+        if mode == "unlocker":
             return ksl_unlocker.run(config, max_pages=args.max_pages)
-        return ksl.run(config, max_pages=args.max_pages, items_file=None)
+        if mode == "browser":
+            return ksl_browser.run(config, max_pages=args.max_pages)
+        if mode == "direct":
+            return ksl.run(config, max_pages=args.max_pages, items_file=None)
+        if mode == "auto":
+            if os.environ.get("BRIGHTDATA_API_TOKEN"):
+                return ksl_unlocker.run(config, max_pages=args.max_pages)
+            try:
+                return ksl.run(config, max_pages=args.max_pages, items_file=None)
+            except Exception:
+                if not _config_bool(config, "kslBrowserFallback", "KSL_BROWSER_FALLBACK"):
+                    raise
+                log.warning("direct KSL scrape failed; trying browser fallback", exc_info=True)
+                return ksl_browser.run(config, max_pages=args.max_pages)
+        raise RuntimeError("kslMode must be one of: auto, direct, unlocker, browser")
     return scraper(config)
 
 

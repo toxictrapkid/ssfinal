@@ -244,6 +244,50 @@ def test_pagination_stops_on_empty_page(monkeypatch):
     assert len(session.calls) == 2  # did not burn pages 3..5
 
 
+def test_pagination_dedupes_and_stops_when_page_adds_no_new_items():
+    """A page that repeats earlier listings adds nothing new and ends the scan."""
+    raw = json.loads(FIXTURE.read_text())
+    session = FakeSession(
+        [
+            FakeResponse(payload=_items_payload(raw)),
+            FakeResponse(payload=_items_payload(raw)),  # same ids again
+            FakeResponse(payload=_items_payload([])),
+        ]
+    )
+    items = fetch_all_items(TRAVERSE_CONFIG, max_pages=5, session=session)
+    assert len(items) == len(raw)  # duplicates dropped
+    assert len(session.calls) == 2  # stopped after the all-duplicate page
+
+
+# --------------------------------------------------------- search segments
+
+
+def test_advanced_vehicle_filters_are_preserved():
+    segments = build_search_segments(
+        {
+            "drive": "4-Wheel Drive",
+            "fuel": "Gasoline",
+            "numberDoors": 4,
+            "sort": 0,
+            "titleType": "Rebuilt/Reconstructed Title",
+            "cleanTitleOnly": False,
+        }
+    )
+    assert segments == [
+        "titleType", "Rebuilt/Reconstructed Title",
+        "numberDoors", "4",
+        "drive", "4-Wheel Drive",
+        "fuel", "Gasoline",
+        "sort", "0",
+        "sellerType", "For Sale By Owner",
+    ]
+
+
+def test_clean_title_shortcut_wins_over_explicit_title_type():
+    segments = build_search_segments({"cleanTitleOnly": True, "titleType": "Salvage Title"})
+    assert segments == ["titleType", "Clean Title", "sellerType", "For Sale By Owner"]
+
+
 # ----------------------------------------------------------- THE GATE (emit)
 
 

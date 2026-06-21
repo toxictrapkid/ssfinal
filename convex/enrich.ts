@@ -14,7 +14,7 @@
 import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { fetchKslDescription, brightDataConfigured } from "./lib/kslWebUnlocker";
+import { fetchKslDetail, brightDataConfigured } from "./lib/kslWebUnlocker";
 import { classifyDrivetrain } from "./lib/reconRules";
 
 /** Active listings whose description we haven't fetched yet, cheapest first. */
@@ -46,13 +46,31 @@ export const setDescription = internalMutation({
     listingId: v.id("listings"),
     description: v.string(),
     mechanicSpecial: v.boolean(),
+    // Detail-page facts the search page may omit. Filled ONLY when the listing
+    // is currently missing them, so we never clobber known search-page data.
+    vin: v.optional(v.union(v.string(), v.null())),
+    mileage: v.optional(v.union(v.number(), v.null())),
+    titleStatus: v.optional(v.union(v.string(), v.null())),
+    trim: v.optional(v.union(v.string(), v.null())),
+    photos: v.optional(v.array(v.string())),
   },
-  handler: async (ctx, { listingId, description, mechanicSpecial }) => {
-    await ctx.db.patch(listingId, {
-      description: description || undefined,
-      mechanicSpecial,
+  handler: async (ctx, a) => {
+    const l = await ctx.db.get(a.listingId);
+    if (!l) return;
+    const patch: Record<string, unknown> = {
+      description: a.description || l.description || undefined,
+      mechanicSpecial: a.mechanicSpecial,
       descCheckedAt: Date.now(),
-    });
+    };
+    if (a.vin && !l.vin) patch.vin = a.vin;
+    if (a.mileage != null && l.mileage == null) patch.mileage = a.mileage;
+    if (a.titleStatus && (l.titleStatus == null || l.titleStatus === "unknown")) patch.titleStatus = a.titleStatus;
+    if (a.trim && !l.trim) patch.trim = a.trim;
+    if (a.photos && a.photos.length && !(l.photos && l.photos.length)) {
+      patch.photos = a.photos;
+      if (!l.photoUrl) patch.photoUrl = a.photos[0];
+    }
+    await ctx.db.patch(a.listingId, patch);
   },
 });
 
@@ -95,18 +113,24 @@ export const enrichDescriptions = action({
     let errors = 0;
     const specials: EnrichResult["specials"] = [];
     for (const r of rows) {
-      let desc: string | null = null;
+      let detail: Awaited<ReturnType<typeof fetchKslDetail>> | null = null;
       try {
-        desc = await fetchKslDescription(r.sourceListingId);
+        detail = await fetchKslDetail(r.sourceListingId);
       } catch {
         errors++;
         continue; // leave descCheckedAt unset so a later run retries it
       }
+      const desc = detail.description;
       const issue = desc ? classifyDrivetrain(`${r.title} ${desc}`) : null;
       await ctx.runMutation(internal.enrich.setDescription, {
         listingId: r._id,
         description: desc ?? "",
         mechanicSpecial: issue !== null,
+        vin: detail.vin,
+        mileage: detail.mileage,
+        titleStatus: detail.titleStatus,
+        trim: detail.trim,
+        photos: detail.photos,
       });
       checked++;
       if (issue) {
@@ -136,17 +160,23 @@ export const enrichTickDescriptions = internalAction({
     if (process.env.SCAN_ENABLED !== "true" || !brightDataConfigured()) return;
     const rows = await ctx.runQuery(internal.enrich.needingDescription, { limit: 15 });
     for (const r of rows) {
-      let desc: string | null = null;
+      let detail: Awaited<ReturnType<typeof fetchKslDetail>> | null = null;
       try {
-        desc = await fetchKslDescription(r.sourceListingId);
+        detail = await fetchKslDetail(r.sourceListingId);
       } catch {
         continue;
       }
+      const desc = detail.description;
       const issue = desc ? classifyDrivetrain(`${r.title} ${desc}`) : null;
       await ctx.runMutation(internal.enrich.setDescription, {
         listingId: r._id,
         description: desc ?? "",
         mechanicSpecial: issue !== null,
+        vin: detail.vin,
+        mileage: detail.mileage,
+        titleStatus: detail.titleStatus,
+        trim: detail.trim,
+        photos: detail.photos,
       });
     }
   },

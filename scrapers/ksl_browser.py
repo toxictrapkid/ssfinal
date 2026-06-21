@@ -156,6 +156,7 @@ async def _scrape(config: dict[str, Any], max_pages: int) -> list[dict]:
                     raise RuntimeError("PerimeterX still blocking after browser load")
 
             segments = build_search_segments(config)
+            seen_ids: set[str] = set()
             for page_num in range(1, max_pages + 1):
                 body = [*segments, "perPage", PER_PAGE, "page", page_num, "es_query_group", None]
                 result = await page.evaluate(JS_FETCH, [API_ENDPOINT, body])
@@ -168,7 +169,24 @@ async def _scrape(config: dict[str, Any], max_pages: int) -> list[dict]:
                     log.info("KSL page %d: empty, stopping", page_num)
                     break
                 log.info("KSL page %d: %d items", page_num, len(items))
-                raw_items.extend(items)
+                # Cross-page dedupe + stop when a page is all duplicates (overlap
+                # from new listings appearing mid-scan, or a pagination problem).
+                added = 0
+                for item in items:
+                    listing_id = item.get("id")
+                    if listing_id is not None:
+                        key = str(listing_id)
+                        if key in seen_ids:
+                            continue
+                        seen_ids.add(key)
+                    raw_items.append(item)
+                    added += 1
+                if added == 0:
+                    log.warning(
+                        "KSL page %d added no new listings; stopping (possible pagination issue)",
+                        page_num,
+                    )
+                    break
                 await page.wait_for_timeout(1200)  # polite, human-ish pacing
         finally:
             await context.close()

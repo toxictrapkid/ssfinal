@@ -174,12 +174,23 @@ function mapRecord(r: Record<string, unknown>): KslRawListing | null {
   };
 }
 
+export interface KslDetail {
+  description: string | null;
+  vin: string | null;
+  mileage: number | null;
+  titleStatus: string | null; // null when KSL doesn't state it (don't overwrite known)
+  trim: string | null;
+  photos: string[];
+}
+
 /**
- * Fetch a single listing's seller DESCRIPTION through the Web Unlocker.
- * The search page omits it, so "needs engine"/"blown motor"/"won't start" only
- * appears here. Reads the description out of the detail page's RSC stream.
+ * Fetch a listing's DETAIL page ONCE and return the facts the search page may
+ * omit — description AND VIN/mileage/title/trim/photos — parsed from the same
+ * RSC record (reuses mapRecord). One Web Unlocker call, no double spend. This
+ * is the single owner of detail-page enrichment (the Python scraper does NOT
+ * fetch detail pages, to avoid paying Bright Data twice for the same page).
  */
-export async function fetchKslDescription(listingId: string): Promise<string | null> {
+export async function fetchKslDetail(listingId: string): Promise<KslDetail> {
   const token = process.env.BRIGHTDATA_API_TOKEN;
   if (!token) throw new Error("BRIGHTDATA_API_TOKEN not set");
   const zone = process.env.BRIGHTDATA_ZONE ?? "web_unlocker1";
@@ -196,29 +207,48 @@ export async function fetchKslDescription(listingId: string): Promise<string | n
     throw new Error("PerimeterX block returned by Web Unlocker");
   }
   const stream = decodeRscStream(html) || html;
+  const empty: KslDetail = { description: null, vin: null, mileage: null, titleStatus: null, trim: null, photos: [] };
   // Prefer the full CAR listing record, else fall back to any "description" key.
   const re = /\{"id":\d+,"listingType":"CAR"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(stream)) !== null) {
     const obj = extractObject(stream, m.index);
     if (!obj) continue;
+    let rec: Record<string, unknown>;
     try {
-      const rec = JSON.parse(obj) as Record<string, unknown>;
-      if (typeof rec.description === "string" && rec.description.trim()) return rec.description;
+      rec = JSON.parse(obj) as Record<string, unknown>;
     } catch {
-      /* skip malformed record */
+      continue; // skip malformed record
     }
+    const description = typeof rec.description === "string" && rec.description.trim() ? rec.description : null;
+    const mapped = mapRecord(rec);
+    if (mapped) {
+      return {
+        description,
+        vin: mapped.vin,
+        mileage: mapped.mileage,
+        titleStatus: mapped.titleStatus !== "unknown" ? mapped.titleStatus : null,
+        trim: mapped.trim,
+        photos: mapped.photos,
+      };
+    }
+    if (description) return { ...empty, description };
   }
   const dm = stream.match(/"description":"((?:[^"\\]|\\.)*)"/);
   if (dm) {
     try {
       const v = JSON.parse('"' + dm[1] + '"') as string;
-      if (v.trim()) return v;
+      if (v.trim()) return { ...empty, description: v };
     } catch {
       /* ignore */
     }
   }
-  return null;
+  return empty;
+}
+
+/** Back-compat wrapper: just the seller description from the detail page. */
+export async function fetchKslDescription(listingId: string): Promise<string | null> {
+  return (await fetchKslDetail(listingId)).description;
 }
 
 /** Fetch one KSL search page through the Web Unlocker and return private-party listings. */

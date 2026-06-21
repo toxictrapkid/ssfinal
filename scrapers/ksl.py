@@ -35,6 +35,8 @@ PER_PAGE = 24  # reference value — KSL's own page size
 MAX_RETRIES = 3
 BACKOFF_SECONDS = (2, 4)  # waits between the 3 attempts
 DEFAULT_MAX_PAGES = 5  # matches requestAllCars' signature default (GUI passes its own)
+# Optional politeness delay between pages (ToS-friendlier). 0 = off.
+PAGE_DELAY_SECONDS = float(os.environ.get("KSL_PAGE_DELAY_SECONDS", "0") or 0)
 
 # Optional outbound proxy to get past KSL bot protection (e.g. Bright Data Web
 # Unlocker). Set KSL_PROXY_URL to the proxy endpoint — e.g.
@@ -79,6 +81,12 @@ def build_search_segments(config: dict[str, Any]) -> list[str]:
     add("miles", config.get("radiusMiles"))
     if config.get("cleanTitleOnly"):
         add("titleType", "Clean Title")
+    else:
+        add("titleType", config.get("titleType"))
+    add("numberDoors", config.get("numberDoors") or config.get("doorCount"))
+    add("drive", config.get("drive"))
+    add("fuel", config.get("fuel"))
+    add("sort", config.get("sort"))
     add("sellerType", "For Sale By Owner")
     return segments
 
@@ -161,13 +169,35 @@ def fetch_all_items(
     own_session = session is None
     session = session or requests.Session()
     items: list[dict] = []
+    seen_ids: set[str] = set()
     try:
         for page in range(1, max_pages + 1):
             page_items = _request_page(session, segments, page)
             log.info("KSL page %d: %d items", page, len(page_items))
             if not page_items:
                 break
-            items.extend(page_items)
+            # Cross-page dedupe: when new listings appear mid-scan, pages overlap.
+            # Skip ids we've already taken and stop if a page is all duplicates.
+            added = 0
+            for item in page_items:
+                listing_id = item.get("id")
+                if listing_id is not None:
+                    key = str(listing_id)
+                    if key in seen_ids:
+                        continue
+                    seen_ids.add(key)
+                items.append(item)
+                added += 1
+            if added == 0:
+                # Canary: a non-empty page that adds nothing new usually means a
+                # pagination problem (e.g. wrong page index returning page 1 again).
+                log.warning(
+                    "KSL page %d added no new listings; stopping (possible pagination issue)",
+                    page,
+                )
+                break
+            if PAGE_DELAY_SECONDS > 0 and page < max_pages:
+                time.sleep(PAGE_DELAY_SECONDS)
     finally:
         if own_session:
             session.close()
