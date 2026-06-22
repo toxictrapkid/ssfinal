@@ -90,9 +90,17 @@ export interface ValuationReport {
   missing: { label: string; status: string; warning: string | null }[];
 }
 
-export function buildReport(listing: Doc<"listings">, rows: Doc<"valuations">[]): ValuationReport {
+export function buildReport(
+  listing: Doc<"listings">,
+  rows: Doc<"valuations">[],
+  opts?: { requireSecondCheck?: boolean }
+): ValuationReport {
+  // Single-check test mode: set VALUATION_REQUIRE_SECOND_CHECK=false in Convex
+  // env to let one fresh Laser pull VERIFY a number (no second source needed).
+  const requireSecondCheck =
+    opts?.requireSecondCheck ?? process.env.VALUATION_REQUIRE_SECOND_CHECK !== "false";
   const inputs = assemble(listing, rows);
-  const results = inputs.map((i) => numberStatus(i));
+  const results = inputs.map((i) => numberStatus(i, Date.now(), { requireSecondCheck }));
   return {
     results,
     overall: overallStatus(results),

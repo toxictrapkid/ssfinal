@@ -54,6 +54,11 @@ export interface ValuationResult extends ValuationInput {
 /** A value older than this is STALE and must be re-checked. */
 export const STALE_MS = 14 * 24 * 60 * 60 * 1000;
 
+export interface StatusOpts {
+  /** When false, a single fresh check is enough to VERIFY (no second source). Default true. */
+  requireSecondCheck?: boolean;
+}
+
 /** Mismatch tolerance: the larger of $500 or 3% of the bigger number. */
 export function mismatchThreshold(a: number, b: number): number {
   return Math.max(500, Math.max(Math.abs(a), Math.abs(b)) * 0.03);
@@ -68,24 +73,26 @@ function valid(n: number | null | undefined): n is number {
 }
 
 /** Status for one valuation number. Order of checks encodes severity. */
-export function numberStatus(v: ValuationInput, now: number = Date.now()): ValuationResult {
+export function numberStatus(v: ValuationInput, now: number = Date.now(), opts: StatusOpts = {}): ValuationResult {
+  const requireSecondCheck = opts.requireSecondCheck ?? true;
   const base = { ...v, label: KIND_LABEL[v.kind], mismatch: false, stale: false, warning: null as string | null };
   // Never accept $0 / null / negative as a real value.
   if (!valid(v.value)) {
     return { ...base, status: "DATA MISSING", warning: v.value === 0 ? "$0 is not a valid value" : "no value on record" };
   }
-  // Must be double-checked against an independent source.
-  if (!valid(v.secondValue)) {
+  if (valid(v.secondValue)) {
+    // Two checks must agree within $500 / 3%.
+    if (isMismatch(v.value, v.secondValue)) {
+      return {
+        ...base,
+        status: "VALUE MISMATCH",
+        mismatch: true,
+        warning: `first $${Math.round(v.value)} vs second $${Math.round(v.secondValue)} differ by more than $500/3%`,
+      };
+    }
+  } else if (requireSecondCheck) {
+    // Default: a number with no independent second check is not verified.
     return { ...base, status: "MANUAL REVIEW REQUIRED", warning: "needs an independent second check" };
-  }
-  // Two checks must agree within $500 / 3%.
-  if (isMismatch(v.value, v.secondValue)) {
-    return {
-      ...base,
-      status: "VALUE MISMATCH",
-      mismatch: true,
-      warning: `first $${Math.round(v.value)} vs second $${Math.round(v.secondValue)} differ by more than $500/3%`,
-    };
   }
   // Both checks must be fresh.
   const newest = Math.max(v.checkedAt ?? 0, v.secondCheckedAt ?? 0);
