@@ -40,7 +40,17 @@ export const pendingVins = query({
       .order("desc")
       .take(limit ?? 20);
     return {
-      vins: rows.map((r) => ({ dedupeKey: r.dedupeKey, vin: r.vin, mileage: r.mileage ?? null })),
+      // year/make/model/trim let the bridge trim-match the KBB + MMR blocks
+      // (those partners return every trim; NADA auto-matches so it needs none).
+      vins: rows.map((r) => ({
+        dedupeKey: r.dedupeKey,
+        vin: r.vin,
+        mileage: r.mileage ?? null,
+        trim: r.trim ?? null,
+        year: r.year ?? null,
+        make: r.make ?? null,
+        model: r.model ?? null,
+      })),
     };
   },
 });
