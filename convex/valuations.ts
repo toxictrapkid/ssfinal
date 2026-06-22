@@ -46,8 +46,22 @@ function assemble(listing: Doc<"listings">, rows: Doc<"valuations">[]): Valuatio
       checkedBy: "system",
       confidence: "medium",
     },
-    jd_full_retail: { kind: "jd_full_retail", value: listing.jdFullRetail ?? null, checkedBy: "system" },
-    base_mmr: { kind: "base_mmr", value: listing.baseMmr ?? null, checkedBy: "system" },
+    jd_full_retail: {
+      kind: "jd_full_retail",
+      value: listing.jdFullRetail ?? null,
+      source: listing.jdFullRetail != null ? "laser" : null,
+      checkedAt: listing.jdFullRetail != null ? (listing.carblyCheckedAt ?? null) : null,
+      checkedBy: "system",
+      confidence: "medium",
+    },
+    base_mmr: {
+      kind: "base_mmr",
+      value: listing.baseMmr ?? null,
+      source: listing.baseMmr != null ? "laser" : null,
+      checkedAt: listing.baseMmr != null ? (listing.carblyCheckedAt ?? null) : null,
+      checkedBy: "system",
+      confidence: "medium",
+    },
   };
 
   return REQUIRED_KINDS.map((kind) => {

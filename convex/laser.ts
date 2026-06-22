@@ -70,6 +70,9 @@ export const appraise = action({
         dedupeKey: v.string(),
         jdCleanTrade: v.union(v.number(), v.null()),
         kbbLending: v.union(v.number(), v.null()),
+        // bridge v4: also capture JD Full Retail (NADA panel) + Base MMR (Manheim).
+        jdFullRetail: v.optional(v.union(v.number(), v.null())),
+        baseMmr: v.optional(v.union(v.number(), v.null())),
       })
     ),
   },
@@ -120,6 +123,8 @@ export const appraise = action({
         postedAt: q.postedAt ?? null,
         jdCleanTrade: g.effJd,
         kbbLending: g.effKbb,
+        jdFullRetail: val.jdFullRetail ?? null,
+        baseMmr: val.baseMmr ?? null,
         jdGap: g.jdGap,
         kbbGap: g.kbbGap,
         estValue: g.estValue,

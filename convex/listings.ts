@@ -413,6 +413,9 @@ const carblyDeal = v.object({
   // carbly gap-rule output
   jdCleanTrade: v.union(v.number(), v.null()),
   kbbLending: v.union(v.number(), v.null()),
+  // additional Laser book values (bridge v4): retail + Manheim MMR
+  jdFullRetail: v.optional(v.union(v.number(), v.null())),
+  baseMmr: v.optional(v.union(v.number(), v.null())),
   jdGap: v.union(v.number(), v.null()),
   kbbGap: v.union(v.number(), v.null()),
   estValue: v.union(v.number(), v.null()),
@@ -446,6 +449,8 @@ export const dealUpsert = internalMutation({
         hot: d.hot,
         carblyJdCleanTrade: d.jdCleanTrade ?? undefined,
         carblyKbbLending: d.kbbLending ?? undefined,
+        jdFullRetail: d.jdFullRetail ?? undefined,
+        baseMmr: d.baseMmr ?? undefined,
         carblyJdGap: d.jdGap ?? undefined,
         carblyKbbGap: d.kbbGap ?? undefined,
         carblyCheckedAt: now,

@@ -24,7 +24,18 @@ const veh = (l: any) => [l.year, l.make, l.model, l.trim].filter(Boolean).join("
 type Role = "owner" | "employee";
 
 function roleFor(req: Request): Role | null {
-  const tok = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  // Accept the token via Authorization: Bearer <token> OR a ?key=/?token= query
+  // param. The query form lets you paste the URL straight into Claude as a
+  // custom connector (no OAuth). Treat the connector URL as a secret + rotate.
+  const header = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  let query = "";
+  try {
+    const u = new URL(req.url);
+    query = (u.searchParams.get("key") || u.searchParams.get("token") || "").trim();
+  } catch {
+    /* ignore */
+  }
+  const tok = header || query;
   if (tok && tok === process.env.MCP_OWNER_TOKEN) return "owner";
   if (tok && tok === process.env.MCP_EMPLOYEE_TOKEN) return "employee";
   return null;
