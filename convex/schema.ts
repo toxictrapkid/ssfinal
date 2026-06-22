@@ -261,4 +261,48 @@ export default defineSchema({
     detail: v.optional(v.string()),
     at: v.number(),
   }).index("by_at", ["at"]),
+
+  // Per-number valuation provenance — the backbone of the hard rule. One row per
+  // (listing, kind). Stores both checks + confidence + proof so JD Clean Trade,
+  // JD Full Retail, KBB Lending, and Base MMR are traceable everywhere. Never
+  // store $0 as a value (use null = DATA MISSING).
+  valuations: defineTable({
+    listingId: v.id("listings"),
+    kind: v.string(), // "jd_clean_trade" | "jd_full_retail" | "kbb_lending" | "base_mmr"
+    value: v.union(v.number(), v.null()),
+    source: v.string(), // "laser" | "marketcheck" | "manual" | "nada" | "kbb" | "manheim"
+    checkedAt: v.number(),
+    checkedBy: v.string(), // "system" | employee name/id
+    secondValue: v.optional(v.union(v.number(), v.null())),
+    secondSource: v.optional(v.string()),
+    secondCheckedAt: v.optional(v.number()),
+    confidence: v.string(), // "high" | "medium" | "low"
+    proofUrl: v.optional(v.string()), // screenshot/export link when available
+    updatedAt: v.number(),
+  })
+    .index("by_listing", ["listingId"])
+    .index("by_listing_kind", ["listingId", "kind"]),
+
+  // Employee work queue created by the MCP tools when data is missing.
+  tasks: defineTable({
+    listingId: v.optional(v.id("listings")),
+    kind: v.string(), // "check_jd_full_retail" | "check_base_mmr" | "verify_vin" | ...
+    title: v.string(),
+    instructions: v.string(),
+    status: v.string(), // "open" | "done"
+    assignedTo: v.optional(v.string()),
+    createdAt: v.number(),
+    doneAt: v.optional(v.string()),
+  })
+    .index("by_status", ["status"])
+    .index("by_listing", ["listingId"]),
+
+  // Append-only audit of every authenticated MCP tool call (no silent failures).
+  mcpAuditLog: defineTable({
+    at: v.number(),
+    role: v.string(), // "owner" | "employee" | "unknown"
+    tool: v.string(),
+    ok: v.boolean(),
+    detail: v.optional(v.string()),
+  }).index("by_at", ["at"]),
 });

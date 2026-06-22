@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
+import { mcpHandler } from "./mcp";
 
 const MAX_BATCH = 200;
 
@@ -115,4 +116,6 @@ http.route({ path: "/laser/pending", method: "GET", handler: laserPending });
 http.route({ path: "/laser/pending", method: "OPTIONS", handler: corsPreflight });
 http.route({ path: "/laser/values", method: "POST", handler: laserValues });
 http.route({ path: "/laser/values", method: "OPTIONS", handler: corsPreflight });
+// Remote MCP server (Claude web/desktop/mobile custom connector). Bearer auth.
+http.route({ path: "/mcp", method: "POST", handler: mcpHandler });
 export default http;
