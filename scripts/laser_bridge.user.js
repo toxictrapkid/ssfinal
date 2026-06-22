@@ -137,7 +137,7 @@
 
   (async () => {
     if (SECRET.includes("PASTE_")) { log("set SECRET (your INGEST_SECRET) at the top"); return; }
-    log("auto-bridge v3 running on", location.host);
+    log("auto-bridge v4 running on", location.host);
     while (true) { let ok = true; try { ok = await cycle(); } catch (e) { log("cycle error", e.message); } await sleep(ok ? 60000 : 120000); }
   })();
 })();
