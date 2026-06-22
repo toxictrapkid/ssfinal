@@ -32,6 +32,7 @@ import type * as mcp from "../mcp.js";
 import type * as notifications from "../notifications.js";
 import type * as partsCosts from "../partsCosts.js";
 import type * as pipeline from "../pipeline.js";
+import type * as publicApi from "../publicApi.js";
 import type * as scoring from "../scoring.js";
 import type * as scrapeQueue from "../scrapeQueue.js";
 import type * as searches from "../searches.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   partsCosts: typeof partsCosts;
   pipeline: typeof pipeline;
+  publicApi: typeof publicApi;
   scoring: typeof scoring;
   scrapeQueue: typeof scrapeQueue;
   searches: typeof searches;
