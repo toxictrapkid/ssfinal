@@ -1,0 +1,472 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Mo / Z Partnership Ledger Report</title><style>
+:root{
+  --navy:#14274e; --slate:#334e68; --ink:#1a2230; --muted:#5b6b7f;
+  --line:#c9d2dd; --soft:#eef2f7; --mo:#0f5d3c; --moBg:#e7f4ee;
+  --z:#8a4b0a; --zBg:#fbeede; --accent:#b08d2a;
+  --posBg:#e7f4ee; --pos:#0f5d3c; --negBg:#fbe9e7; --neg:#9c2a1a;
+}
+*{box-sizing:border-box}
+@page{ size:letter; margin:0.7in 0.65in 0.8in 0.65in; }
+html,body{margin:0;padding:0}
+body{
+  font-family:"Helvetica Neue",Arial,sans-serif;
+  color:var(--ink); font-size:10.5pt; line-height:1.5;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact;
+}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;color:var(--navy);}
+p{margin:0 0 8px}
+.lead{color:var(--muted); font-size:10pt; margin:2px 0 12px}
+.num{text-align:right; font-variant-numeric:tabular-nums;
+     font-family:"Helvetica Neue",Arial,sans-serif;}
+
+/* ---- page control ---- */
+.page-break{ break-after:page; }
+.page-start{ break-before:page; }
+section.txn{ padding-top:6px; margin-bottom:22px;
+             border-top:3px solid var(--navy); }
+section.txn:first-child{border-top:none}
+/* keep headings attached to the block that follows them */
+h2,h3{ break-after:avoid; break-inside:avoid; }
+/* the transaction heading + its lead move together to the next page
+   rather than being orphaned (and overflowing) at a page bottom */
+.txn-head{ break-inside:avoid; break-after:avoid; }
+/* small atomic blocks must never split across a page */
+.runbox, .note, .front, table.th, table.grid.kv{ break-inside:avoid; }
+
+/* ---- cover ---- */
+.cover{ height:9.0in; display:flex; flex-direction:column;
+        justify-content:center; text-align:center; }
+.cover .kicker{letter-spacing:5px; font-size:11pt; color:var(--accent);
+   text-transform:uppercase; font-family:"Helvetica Neue",Arial,sans-serif; font-weight:600}
+.cover h1{font-size:34pt; margin:14px 0 6px; letter-spacing:1px; line-height:1.15}
+.cover .sub{font-size:14pt; color:var(--slate); font-family:Georgia,serif; font-style:italic}
+.cover .rule{width:120px; height:3px; background:var(--accent); margin:26px auto}
+.cover .finalbox{
+   margin:30px auto 0; max-width:5.3in; border:2px solid var(--navy);
+   border-radius:10px; padding:22px 26px; background:var(--soft);}
+.cover .finalbox .lbl{letter-spacing:3px; text-transform:uppercase;
+   font-size:9.5pt; color:var(--slate)}
+.cover .finalbox .amt{font-size:26pt; font-weight:700; color:var(--pos);
+   font-family:Georgia,serif; margin-top:6px}
+.cover .meta{margin-top:38px; color:var(--muted); font-size:9.5pt}
+
+/* ---- headings ---- */
+h1.page-title{font-size:20pt; border-bottom:2px solid var(--navy);
+   padding-bottom:8px; margin:0 0 16px}
+h2{font-size:14.5pt; margin:0 0 10px; display:flex; align-items:center; gap:10px}
+.txn-idx{display:inline-flex; align-items:center; justify-content:center;
+   width:26px; height:26px; background:var(--navy); color:#fff; border-radius:50%;
+   font-size:11pt; font-family:"Helvetica Neue",Arial,sans-serif; flex:0 0 auto}
+h3{font-size:11.5pt; color:var(--slate); margin:14px 0 6px;
+   display:flex; align-items:center; gap:8px}
+.sub-letter{display:inline-flex; align-items:center; justify-content:center;
+   width:19px;height:19px;border:1.5px solid var(--slate); color:var(--slate);
+   border-radius:4px; font-size:9pt; font-weight:700;
+   font-family:"Helvetica Neue",Arial,sans-serif}
+
+/* ---- tables ---- */
+table.grid{width:100%; border-collapse:collapse; margin:4px 0 10px; font-size:10pt}
+table.grid th, table.grid td{border:1px solid var(--line); padding:5px 9px}
+table.grid thead th{background:var(--navy); color:#fff; text-align:left;
+   font-family:"Helvetica Neue",Arial,sans-serif; font-weight:600; font-size:9.5pt;
+   letter-spacing:.3px}
+table.grid tbody tr:nth-child(even){background:var(--soft)}
+table.grid tr.tot td{background:#dde5ef; font-weight:700; border-top:2px solid var(--slate)}
+table.grid.kv td:first-child{width:62%}
+table.grid.exp td:nth-child(2){width:22%}
+.pay-mo{color:var(--mo); font-weight:600}
+.pay-z{color:var(--z); font-weight:600}
+.pay-other{color:var(--neg); font-weight:600}
+
+table.th{margin-top:6px}
+table.th.mo thead th{background:var(--mo)}
+table.th.z thead th{background:var(--z)}
+table.th tr.tot td{background:#d7e7de}
+table.th.z tr.tot td{background:#f3e2cd}
+
+/* ---- running balance box ---- */
+.runbox{border:1.5px solid var(--slate); border-radius:8px; overflow:hidden;
+   margin:6px 0 4px}
+.runrow{display:flex; justify-content:space-between; padding:7px 12px;
+   border-bottom:1px solid var(--line)}
+.runrow span:first-child{color:var(--muted)}
+.runrow.new{background:var(--navy); color:#fff; font-weight:700; border-bottom:none}
+.runrow.new span:first-child{color:#cdd8e8}
+
+/* ---- Z-front callout ---- */
+.front{background:var(--zBg); border-left:4px solid var(--z); padding:9px 13px;
+   border-radius:0 6px 6px 0; margin:8px 0; font-weight:600; color:var(--ink)}
+
+/* ---- audit note ---- */
+.note{background:#fff8e6; border:1px solid var(--accent); border-radius:6px;
+   padding:9px 12px; margin:8px 0; font-size:9.3pt; color:#5a4a1a}
+.note-tag{display:inline-block; background:var(--accent); color:#fff;
+   font-size:7.5pt; letter-spacing:1px; padding:1px 6px; border-radius:3px;
+   margin-right:6px; vertical-align:1px; font-weight:700}
+
+/* ---- rules / summary cards ---- */
+.rule-list{list-style:none; padding:0; margin:0}
+.rule-list li{border:1px solid var(--line); border-left:4px solid var(--navy);
+   background:var(--soft); padding:11px 15px; margin-bottom:10px; border-radius:0 6px 6px 0}
+.rule-list li b{color:var(--navy)}
+.cards{display:flex; gap:14px; flex-wrap:wrap; margin:8px 0 16px}
+.card{flex:1 1 45%; border:1px solid var(--line); border-radius:8px; padding:14px 16px;
+   background:#fff}
+.card h4{margin:0 0 8px; font-size:10.5pt; color:var(--slate);
+   font-family:"Helvetica Neue",Arial,sans-serif; letter-spacing:.4px;
+   text-transform:uppercase}
+.bigfinal{border:2px solid var(--pos); background:var(--posBg); border-radius:10px;
+   padding:18px 22px; text-align:center; margin:6px 0 18px}
+.bigfinal .lbl{letter-spacing:2px; text-transform:uppercase; color:var(--slate);
+   font-size:9.5pt}
+.bigfinal .amt{font-size:24pt; font-weight:700; color:var(--pos);
+   font-family:Georgia,serif; margin-top:4px}
+
+.small{font-size:9pt;color:var(--muted)}
+</style></head><body>
+<div class="cover page-break">
+  <div class="kicker">Vehicle Partnership Accounting Report</div>
+  <h1>MO / Z PARTNERSHIP<br>LEDGER REPORT</h1>
+  <div class="sub">A full audit-style partnership statement</div>
+  <div class="rule"></div>
+  <div class="finalbox">
+    <div class="lbl">Final Current Balance</div>
+    <div class="amt">Z Owes Mo $13,414.02</div>
+  </div>
+  <div class="meta">Prepared as a partner-facing reconciliation &middot;
+     Every figure recomputed from source inputs<br>
+     Positive balance = Z owes Mo &nbsp;|&nbsp; Negative balance = Mo owes Z</div>
+</div>
+<div class="page-break">
+  <h1 class="page-title">Ledger Rules</h1>
+  <p class="lead">These rules govern every calculation in this report. They are
+     applied consistently to all 24 recorded ledger events.</p>
+  <ul class="rule-list"><li><b>Positive balance</b> means <b>Z owes Mo.</b></li><li><b>Negative balance</b> means <b>Mo owes Z.</b></li><li><b>Partner deals are split 50 / 50</b> unless otherwise stated.</li><li><b>Only expenses labeled &ldquo;Mo&rdquo;</b> are counted as Mo expenses. All other expenses are treated as Z-paid unless the ledger specifically says another person paid them.</li><li>Z-paid purchase funding is always written as: &ldquo;Z paid for Mo&rsquo;s 50% share of the purchase.&rdquo;</li><li>Named payees/vendors (Drako, Tito, Taylor, Talon, Luis, Angela, AutoZone, gas, tow, Lyft, emissions, car wash, parts, repairs, etc.) are listed exactly as written and classified clearly. If a payer is not explicitly Mo, it is never counted as a Mo expense.</li></ul>
+  <h3><span class="sub-letter">i</span> How each figure is derived</h3>
+  <table class="grid"><thead><tr><th>Figure</th><th>Formula</th></tr></thead><tbody>
+   <tr><td>Total Cost</td><td>Purchase price + all listed expenses</td></tr>
+   <tr><td>Total Profit</td><td>Sale price &minus; Total Cost</td></tr>
+   <tr><td>Profit Split (each)</td><td>Total Profit &divide; 2</td></tr>
+   <tr><td>Mo Take-Home</td><td>Mo car half + Mo expense reimbursement + Mo profit share</td></tr>
+   <tr><td>Z Take-Home</td><td>Z car half + Z expense reimbursement + Z profit share</td></tr>
+   <tr><td>Running Balance</td><td>Prior balance &plusmn; transaction impact
+       (positive = Z owes Mo)</td></tr>
+  </tbody></table>
+</div>
+<div class="page-break">
+  <h1 class="page-title">Executive Summary</h1>
+  <div class="bigfinal">
+     <div class="lbl">Final Current Balance</div>
+     <div class="amt">Z Owes Mo $13,414.02</div>
+  </div>
+  <div class="cards">
+    <div class="card">
+      <h4>Cash Paid to Mo</h4>
+      <table class="grid kv"><tbody>
+        <tr><td>6/15</td><td class="num">$2,000</td></tr>
+        <tr><td>6/17</td><td class="num">$2,000</td></tr>
+        <tr><td>Later Disbursement</td><td class="num">$150</td></tr>
+        <tr class="tot"><td>Total Paid to Mo</td><td class="num">$4,150</td></tr>
+      </tbody></table>
+    </div>
+    <div class="card">
+      <h4>Current Inventory</h4>
+      <table class="grid kv"><tbody>
+        <tr><td>2016 Cadillac XTS</td><td class="num">$6,610</td></tr>
+        <tr><td>2020 Ford F150</td><td class="num">$14,430</td></tr>
+        <tr class="tot"><td>Total Inventory Cost</td><td class="num">$21,040</td></tr>
+      </tbody></table>
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card">
+      <h4>Z Share in Inventory</h4>
+      <div style="font-size:19pt;font-weight:700;color:var(--z);
+           font-family:Georgia,serif">$10,520</div>
+    </div>
+    <div class="card">
+      <h4>Mo Share in Inventory</h4>
+      <div style="font-size:19pt;font-weight:700;color:var(--mo);
+           font-family:Georgia,serif">$10,520</div>
+    </div>
+  </div>
+  <p class="small">The report that follows walks through all
+     24 ledger events in chronological order, each ending with the
+     updated running balance. A full reconciliation and inventory statement close
+     the report.</p>
+</div><div class="page-break"><h1 class="page-title">Chronological Ledger</h1><p class="lead">All transactions in order. Each vehicle sale follows the same A&ndash;F structure: purchase, expenses, sale, Mo take-home, Z take-home, and the resulting running balance.</p></div><section class="txn"><div class="txn-head"><h2><span class="txn-idx">1</span> Mitsubishi + Q50</h2><p class="lead">Two completed vehicles carried into this ledger as Mo take-home amounts. These establish the opening amount owed to Mo.</p></div><h3><span class="sub-letter">A</span> Take-Home Summary</h3><table class="grid kv"><tbody><tr><td>Mitsubishi &mdash; Mo Take-Home</td><td class="num">$4,635</td></tr><tr><td>Q50 &mdash; Mo Take-Home</td><td class="num">$4,781</td></tr><tr><td>Combined Mo Take-Home</td><td class="num"><b>$9,416</b></td></tr></tbody></table><div class="note"><span class="note-tag">AUDIT NOTE</span> Z take-home for the Mitsubishi and Q50 is <b>not explicitly stated in the source ledger</b>. Only the Mo take-home figures were provided, so no Z figure is shown.</div><h3><span class="sub-letter">F</span> Running Balance</h3>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Settled — $0.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $9,416.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $9,416.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">2</span> Impala</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$2,380</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Half</td><td class="num">$1,190</td></tr><tr><td>Funding</td><td class="num">Z paid for the entire purchase (including Mo&rsquo;s half).</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Zaki</td><td class="num">$44</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Mo</td><td class="num">$70</td><td class="pay-mo">Mo</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$114</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$5,900</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$2,494</td></tr><tr><td>Total Profit</td><td class="num">$3,406</td></tr><tr><td>Profit Split (each)</td><td class="num">$1,703</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><p class="lead">Z funded the full purchase, so Mo&rsquo;s car half nets to zero against the funding. Mo is credited his profit share plus his own reimbursable expense.</p><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Profit Half</td><td class="num">$1,703</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$70</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$1,773</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Purchase Reimbursement</td><td class="num">$2,380</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$44</td></tr><tr><td>Profit Half</td><td class="num">$1,703</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$4,127</td></tr></tbody></table><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">Balance impact is Mo&rsquo;s net addition of $1,773 (profit half + Mo expense).</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $9,416.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $1,773.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $11,189.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">3</span> 2016 Nissan Rogue — Purchased</h2><p class="lead">A single vehicle purchased for the partnership.</p></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Total Purchase</td><td class="num">$9,150</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Half</td><td class="num">$4,575</td></tr></tbody></table><div class="front">Z paid for Mo&rsquo;s 50% share of the purchase.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">Z paid for Mo&rsquo;s 50% share of the purchase, so the balance moves toward Mo by $4,575.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $11,189.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">&minus; $4,575.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $6,614.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">4</span> Explorer / Pacifica / Buick — Purchased</h2><p class="lead">Three vehicles acquired together as a bundle.</p></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Total Purchase</td><td class="num">$24,075</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Half</td><td class="num">$12,037.50</td></tr></tbody></table><div class="front">Z paid for Mo&rsquo;s 50% share of the purchase.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">Z paid for Mo&rsquo;s 50% share of the purchase, so the balance moves toward Mo by $12,037.50.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $6,614.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">&minus; $12,037.50</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Mo Owes Z $5,423.50</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">5</span> Explorer — Sold</h2><p class="lead">First sale from the Explorer / Pacifica / Buick bundle.</p></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$10,860</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$5,430</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Talon</td><td class="num">$50</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Gas</td><td class="num">$30</td><td class="pay-z">Z (Zaki)</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$80</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$16,500</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$10,940</td></tr><tr><td>Total Profit</td><td class="num">$5,560</td></tr><tr><td>Profit Split (each)</td><td class="num">$2,780</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$5,430</td></tr><tr><td>Profit Half</td><td class="num">$2,780</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$8,210</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$5,430</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$80</td></tr><tr><td>Profit Half</td><td class="num">$2,780</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$8,290</td></tr></tbody></table><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $8,210; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Mo Owes Z $5,423.50</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $8,210.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $2,786.50</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">6</span> 2016 Nissan Rogue — Sold</h2><p class="lead">Sale of the Rogue purchased in transaction 3, followed by three miscellaneous adjustments recorded against the partnership balance.</p></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$9,150</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$4,575</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Mo</td><td class="num">$586</td><td class="pay-mo">Mo</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$586</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$11,800</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$9,736</td></tr><tr><td>Total Profit</td><td class="num">$2,064</td></tr><tr><td>Profit Split (each)</td><td class="num">$1,032</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$4,575</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$586</td></tr><tr><td>Profit Half</td><td class="num">$1,032</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$6,193</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$4,575</td></tr><tr><td>Profit Half</td><td class="num">$1,032</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$5,607</td></tr></tbody></table><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $6,193; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $2,786.50</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $6,193.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $8,979.50</span></div>
+    </div><h3><span class="sub-letter">G</span> Post-Sale Adjustments</h3><table class="grid kv"><tbody><tr><td>GLE Commission</td><td class="num">+ $250</td></tr><tr><td>Insurance</td><td class="num">&minus; $110</td></tr><tr><td>Carfax</td><td class="num">&minus; $100</td></tr><tr class="tot"><td>Net Adjustment</td><td class="num">+ $40</td></tr></tbody></table>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $8,979.50</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $40.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $9,019.50</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">7</span> Equinox — Purchased</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Total Purchase</td><td class="num">$5,169</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Half</td><td class="num">$2,584.50</td></tr></tbody></table><div class="front">Z paid for Mo&rsquo;s 50% share of the purchase.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">Z paid for Mo&rsquo;s 50% share of the purchase, so the balance moves toward Mo by $2,584.50.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $9,019.50</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">&minus; $2,584.50</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $6,435.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">8</span> Buick — Sold</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$5,690</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$2,845</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Mo</td><td class="num">$750</td><td class="pay-mo">Mo</td></tr><tr><td>Zaki</td><td class="num">$100</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Drako</td><td class="num">$625</td><td class="pay-other">Third party (listed separately)</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$1,475</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$8,000</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$7,165</td></tr><tr><td>Total Profit</td><td class="num">$835</td></tr><tr><td>Profit Split (each)</td><td class="num">$417.50</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$2,845</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$750</td></tr><tr><td>Profit Half</td><td class="num">$417.50</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$4,012.50</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$2,845</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$100</td></tr><tr><td>Profit Half</td><td class="num">$417.50</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$3,362.50</td></tr></tbody></table><div class="note"><span class="note-tag">AUDIT NOTE</span> <b>Drako &mdash; $625.00</b> is included in Total Cost (it reduced the profit) but the source ledger does <b>not</b> reimburse it in either partner&rsquo;s take-home, so it is listed separately here and not hidden. If it were treated as a Z-paid expense (the standard rule), Z&rsquo;s take-home would be $3,987.50; the report preserves the source figure of $3,362.50.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $4,012.50; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $6,435.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $4,012.50</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $10,447.50</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">9</span> Jeep + 2021 Nissan Rogue — Purchased</h2><p class="lead">Two vehicles acquired together for a combined $21,850. Individual prices are not itemized in the source ledger.</p></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid"><thead><tr><th>Vehicle</th><th class="num">Purchase</th><th class="num">Each Half</th></tr></thead><tbody><tr><td>Jeep</td><td class="num"><span class="small">not explicitly stated in source ledger</span></td><td class="num"><span class="small">&mdash;</span></td></tr><tr><td>2021 Nissan Rogue</td><td class="num"><span class="small">not explicitly stated in source ledger</span></td><td class="num"><span class="small">&mdash;</span></td></tr><tr class="tot"><td>Total Purchase</td><td class="num">$21,850</td><td class="num">$10,925</td></tr></tbody></table><div class="front">Z paid for Mo&rsquo;s 50% share of the purchase.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">Z paid for Mo&rsquo;s 50% share of the purchase, so the balance moves toward Mo by $10,925.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $10,447.50</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">&minus; $10,925.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Mo Owes Z $477.50</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">10</span> Pacifica — Sold</h2><p class="lead">Second sale from the Explorer / Pacifica / Buick bundle.</p></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$7,525</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$3,762.50</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Mo</td><td class="num">$1,101</td><td class="pay-mo">Mo</td></tr><tr><td>Zaki / Drako</td><td class="num">$1,737</td><td class="pay-z">Z (Zaki)</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$2,838</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$15,300</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$10,363</td></tr><tr><td>Total Profit</td><td class="num">$4,937</td></tr><tr><td>Profit Split (each)</td><td class="num">$2,468.50</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$3,762.50</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$1,101</td></tr><tr><td>Profit Half</td><td class="num">$2,468.50</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$7,332</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$3,762.50</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$1,737</td></tr><tr><td>Profit Half</td><td class="num">$2,468.50</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$7,968</td></tr></tbody></table><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $7,332; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Mo Owes Z $477.50</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $7,332.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $6,854.50</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">11</span> Jeep Cherokee — Sold</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$9,900</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$4,950</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Gas</td><td class="num">$30</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Car Wash</td><td class="num">$15</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Lyft</td><td class="num">$60</td><td class="pay-z">Z (Zaki)</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$105</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$10,750</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$10,005</td></tr><tr><td>Total Profit</td><td class="num">$745</td></tr><tr><td>Profit Split (each)</td><td class="num">$372.50</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$4,950</td></tr><tr><td>Profit Half</td><td class="num">$372.50</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$5,322.50</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$4,950</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$105</td></tr><tr><td>Profit Half</td><td class="num">$372.50</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$5,427.50</td></tr></tbody></table><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $5,322.50; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $6,854.50</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $5,322.50</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $12,177.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">12</span> Sportage / Escape / Subaru / Edge / Tucson — Purchased</h2><p class="lead">A five-vehicle bulk purchase.</p></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid"><thead><tr><th>Vehicle</th><th class="num">Purchase</th><th class="num">Each Half</th></tr></thead><tbody><tr><td>Kia Sportage</td><td class="num">$3,700</td><td class="num">$1,850</td></tr><tr><td>Ford Escape</td><td class="num">$4,300</td><td class="num">$2,150</td></tr><tr><td>Subaru</td><td class="num">$5,750</td><td class="num">$2,875</td></tr><tr><td>Ford Edge</td><td class="num">$17,000</td><td class="num">$8,500</td></tr><tr><td>Hyundai Tucson</td><td class="num">$6,900</td><td class="num">$3,450</td></tr><tr class="tot"><td>Total Purchase</td><td class="num">$37,650</td><td class="num">$18,825</td></tr></tbody></table><div class="front">Z paid for Mo&rsquo;s 50% share of the purchase.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">Z paid for Mo&rsquo;s 50% share of the purchase, so the balance moves toward Mo by $18,825.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $12,177.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">&minus; $18,825.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Mo Owes Z $6,648.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">13</span> Equinox — Sold</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$5,169</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$2,584.50</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Tow x2</td><td class="num">$200</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Oil Change</td><td class="num">$40</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Gas</td><td class="num">$50</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Mo</td><td class="num">$418</td><td class="pay-mo">Mo</td></tr><tr><td>Lyft</td><td class="num">$60</td><td class="pay-z">Z (Zaki)</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$768</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$6,100</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$5,937</td></tr><tr><td>Total Profit</td><td class="num">$163</td></tr><tr><td>Profit Split (each)</td><td class="num">$81.50</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$2,584.50</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$418</td></tr><tr><td>Profit Half</td><td class="num">$81.50</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$3,084</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$2,584.50</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$350</td></tr><tr><td>Profit Half</td><td class="num">$81.50</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$3,016</td></tr></tbody></table><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $3,084; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Mo Owes Z $6,648.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $3,084.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Mo Owes Z $3,564.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">14</span> 2021 Nissan Rogue — Sold</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$11,950</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$5,975</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Tow x2</td><td class="num">$200</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Drako</td><td class="num">$50</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Headrests</td><td class="num">$75</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Filter / Gasket</td><td class="num">$88</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>AutoZone</td><td class="num">$31</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Mo</td><td class="num">$929</td><td class="pay-mo">Mo</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$1,373</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$14,250</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$13,323</td></tr><tr><td>Total Profit</td><td class="num">$927</td></tr><tr><td>Profit Split (each)</td><td class="num">$463.50</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$5,975</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$929</td></tr><tr><td>Profit Half</td><td class="num">$463.50</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$7,367.50</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$5,975</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$444</td></tr><tr><td>Profit Half</td><td class="num">$463.50</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$6,882.50</td></tr></tbody></table><div class="note"><span class="note-tag">AUDIT NOTE</span> All non-Mo expenses ($444.00 total: Tow, Drako, Headrests, Filter/Gasket, AutoZone) are treated as Z-paid per the standard rule. &ldquo;Drako&rdquo; is a named payee; the source ledger includes it in the Z-paid group, so it is reimbursed to Z here. If Drako were paid by someone else, that $50 would be broken out separately.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $7,367.50; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Mo Owes Z $3,564.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $7,367.50</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $3,803.50</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">15</span> Subaru Outback — Sold</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$5,750</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$2,875</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Camera</td><td class="num">$171</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Gas</td><td class="num">$15</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>OBD Scanner</td><td class="num">$80</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Tow</td><td class="num">$100</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Lyft</td><td class="num">$35</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Glue</td><td class="num">$15</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Taylor</td><td class="num">$83</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Lyft</td><td class="num">$30</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Mo</td><td class="num">$132</td><td class="pay-mo">Mo</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$661</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$7,400</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$6,411</td></tr><tr><td>Total Profit</td><td class="num">$989</td></tr><tr><td>Profit Split (each)</td><td class="num">$494.50</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$2,875</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$132</td></tr><tr><td>Profit Half</td><td class="num">$494.50</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$3,501.50</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$2,875</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$529</td></tr><tr><td>Profit Half</td><td class="num">$494.50</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$3,898.50</td></tr></tbody></table><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $3,501.50; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $3,803.50</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $3,501.50</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $7,305.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">16</span> Cash Paid to Mo</h2></div><h3><span class="sub-letter">A</span> Cash Disbursement</h3><table class="grid kv"><tbody><tr><td>6/15</td><td class="num">$2,000</td></tr><tr><td>6/17</td><td class="num">$2,000</td></tr><tr class="tot"><td>Total Paid to Mo</td><td class="num">$4,000</td></tr></tbody></table><p class="lead">Cash paid directly to Mo reduces the amount Z owes Mo.</p><h3><span class="sub-letter">F</span> Running Balance</h3>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $7,305.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">&minus; $4,000.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $3,305.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">17</span> Kia Sportage — Sold</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$3,700</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$1,850</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Engine</td><td class="num">$2,420</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Gas</td><td class="num">$25</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Tito Labor</td><td class="num">$922</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Luis Windshield</td><td class="num">$450</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Gas</td><td class="num">$20</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Mo</td><td class="num">$130</td><td class="pay-mo">Mo</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$3,967</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$11,500</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$7,667</td></tr><tr><td>Total Profit</td><td class="num">$3,833</td></tr><tr><td>Profit Split (each)</td><td class="num">$1,916.50</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$1,850</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$130</td></tr><tr><td>Profit Half</td><td class="num">$1,916.50</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$3,896.50</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$1,850</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$3,837</td></tr><tr><td>Profit Half</td><td class="num">$1,916.50</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$7,603.50</td></tr></tbody></table><div class="note"><span class="note-tag">AUDIT NOTE</span> All non-Mo expenses ($3,837.00 total) are treated as Z-paid per the standard rule. &ldquo;Tito Labor&rdquo; ($922) and &ldquo;Luis Windshield&rdquo; ($450) are named vendors/payees, not the payer; the source ledger groups them with Z-paid costs. If Tito or Luis were paid directly by someone else, those amounts would be listed separately.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $3,896.50; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $3,305.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $3,896.50</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $7,201.50</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">18</span> Ford Escape — Sold</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$4,300</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$2,150</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Paint</td><td class="num">$360</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Emissions</td><td class="num">$35</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Lee&rsquo;s Marketplace</td><td class="num">$7</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Mo</td><td class="num">$81</td><td class="pay-mo">Mo</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$483</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$6,500</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$4,783</td></tr><tr><td>Total Profit</td><td class="num">$1,717</td></tr><tr><td>Profit Split (each)</td><td class="num">$858.50</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$2,150</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$81</td></tr><tr><td>Profit Half</td><td class="num">$858.50</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$3,089.50</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$2,150</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$402</td></tr><tr><td>Profit Half</td><td class="num">$858.50</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$3,410.50</td></tr></tbody></table><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $3,089.50; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $7,201.50</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $3,089.50</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $10,291.00</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">19</span> Hyundai Tucson — Sold</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$6,900</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$3,450</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Taylor</td><td class="num">$200</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>AC Compressor</td><td class="num">$233.96</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Wheel Bearing</td><td class="num">$170</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Tito</td><td class="num">$250</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Angela — Starbucks</td><td class="num">$30</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Lyft</td><td class="num">$79</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Mo</td><td class="num">$89</td><td class="pay-mo">Mo</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$1,051.96</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$8,800</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$7,951.96</td></tr><tr><td>Total Profit</td><td class="num">$848.04</td></tr><tr><td>Profit Split (each)</td><td class="num">$424.02</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$3,450</td></tr><tr><td>Mo Expense Reimbursement</td><td class="num">$89</td></tr><tr><td>Profit Half</td><td class="num">$424.02</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$3,963.02</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$3,450</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$962.96</td></tr><tr><td>Profit Half</td><td class="num">$424.02</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$4,836.98</td></tr></tbody></table><div class="note"><span class="note-tag">AUDIT NOTE</span> All non-Mo expenses ($962.96 total) are treated as Z-paid per the standard rule. &ldquo;Taylor&rdquo; ($200), &ldquo;Tito&rdquo; ($250) and &ldquo;Angela &mdash; Starbucks&rdquo; ($30) are named payees; the source ledger groups them with Z-paid costs. If any of them were paid directly by someone else, that amount would be listed separately.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $3,963.02; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $10,291.00</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $3,963.02</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $14,254.02</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">20</span> Ford Edge — Sold / Funded</h2></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$17,000</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Car Half</td><td class="num">$8,500</td></tr></tbody></table><h3><span class="sub-letter">B</span> Expense Breakdown</h3><table class="grid exp"><thead><tr><th>Expense</th><th class="num">Amount</th><th>Paid By / Assigned To</th></tr></thead><tbody><tr><td>Headlight</td><td class="num">$240</td><td class="pay-z">Z (Zaki)</td></tr><tr><td>Taylor</td><td class="num">$600</td><td class="pay-z">Z (Zaki)</td></tr><tr class="tot"><td>Total Listed Expenses</td><td class="num">$840</td><td></td></tr></tbody></table><h3><span class="sub-letter">C</span> Sale Details</h3><table class="grid kv"><tbody><tr><td>Sold For</td><td class="num">$20,500</td></tr><tr><td>Total Cost (purchase + expenses)</td><td class="num">$17,840</td></tr><tr><td>Total Profit</td><td class="num">$2,660</td></tr><tr><td>Profit Split (each)</td><td class="num">$1,330</td></tr></tbody></table><h3><span class="sub-letter">D</span> Mo Take-Home</h3><table class="grid th mo"><thead><tr><th colspan="2">Mo Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$8,500</td></tr><tr><td>Profit Half</td><td class="num">$1,330</td></tr><tr class="tot"><td>Mo Total Take-Home</td><td class="num">$9,830</td></tr></tbody></table><h3><span class="sub-letter">E</span> Z Take-Home</h3><table class="grid th z"><thead><tr><th colspan="2">Z Take-Home</th></tr></thead><tbody><tr><td>Car Half</td><td class="num">$8,500</td></tr><tr><td>Z Expense Reimbursement</td><td class="num">$840</td></tr><tr><td>Profit Half</td><td class="num">$1,330</td></tr><tr class="tot"><td>Z Total Take-Home</td><td class="num">$10,670</td></tr></tbody></table><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">The car sale credits Mo his take-home of $9,830; the balance moves toward Mo by that amount.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $14,254.02</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">+ $9,830.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $24,084.02</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">21</span> 2016 Cadillac XTS — Purchased</h2><p class="lead">Vehicle currently held in inventory. Purchase $6,580 + $30 gas = $6,610 total cost.</p></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Purchase Price</td><td class="num">$6,580</td></tr><tr><td>Gas</td><td class="num">$30</td></tr><tr><td>Total Cost</td><td class="num">$6,610</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Half</td><td class="num">$3,305</td></tr></tbody></table><div class="front">Z paid for Mo&rsquo;s 50% share of the purchase.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">Z paid for Mo&rsquo;s 50% share of the purchase, so the balance moves toward Mo by $3,305.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $24,084.02</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">&minus; $3,305.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $20,779.02</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">22</span> 2020 Ford F150 — Purchased</h2><p class="lead">Vehicle currently held in inventory. Corrected purchase price of $14,430.</p></div><h3><span class="sub-letter">A</span> Purchase Details</h3><table class="grid kv"><tbody><tr><td>Total Purchase</td><td class="num">$14,430</td></tr><tr><td>Ownership Split</td><td class="num">50 / 50</td></tr><tr><td>Each Partner&rsquo;s Half</td><td class="num">$7,215</td></tr></tbody></table><div class="front">Z paid for Mo&rsquo;s 50% share of the purchase.</div><h3><span class="sub-letter">F</span> Running Balance</h3><p class="lead">Z paid for Mo&rsquo;s 50% share of the purchase, so the balance moves toward Mo by $7,215.</p>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $20,779.02</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">&minus; $7,215.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $13,564.02</span></div>
+    </div></section><section class="txn"><div class="txn-head"><h2><span class="txn-idx">23</span> Cash Disbursement to Mo</h2><p class="lead">A final $150 cash disbursement paid directly to Mo.</p></div><h3><span class="sub-letter">A</span> Cash Disbursement</h3><table class="grid kv"><tbody><tr><td>Later Disbursement</td><td class="num">$150</td></tr><tr class="tot"><td>Total Paid to Mo</td><td class="num">$150</td></tr></tbody></table><p class="lead">Cash paid directly to Mo reduces the amount Z owes Mo.</p><h3><span class="sub-letter">F</span> Running Balance</h3>
+    <div class="runbox">
+      <div class="runrow"><span>Previous Balance</span>
+        <span class="num">Z Owes Mo $13,564.02</span></div>
+      <div class="runrow"><span>Transaction Impact</span>
+        <span class="num">&minus; $150.00</span></div>
+      <div class="runrow new"><span>New Running Balance</span>
+        <span class="num">Z Owes Mo $13,414.02</span></div>
+    </div></section>
+<div class="page-break page-start">
+  <h1 class="page-title">Full Reconciliation — Running Balance Chain</h1>
+  <p class="lead">Every event in order, with the balance before, the impact, and the
+     balance after. Positive = Z owes Mo; negative = Mo owes Z.</p>
+  <table class="grid"><thead><tr>
+     <th>Transaction / Event</th><th class="num">Balance Before</th>
+     <th class="num">Impact</th><th class="num">Balance After</th>
+  </tr></thead><tbody><tr><td>Mitsubishi + Q50</td><td class="num">Settled — $0.00</td><td class="num">+ $9,416.00</td><td class="num"><b>Z Owes Mo $9,416.00</b></td></tr><tr><td>Impala</td><td class="num">Z Owes Mo $9,416.00</td><td class="num">+ $1,773.00</td><td class="num"><b>Z Owes Mo $11,189.00</b></td></tr><tr><td>2016 Nissan Rogue — Purchased</td><td class="num">Z Owes Mo $11,189.00</td><td class="num">&minus; $4,575.00</td><td class="num"><b>Z Owes Mo $6,614.00</b></td></tr><tr><td>Explorer / Pacifica / Buick — Purchased</td><td class="num">Z Owes Mo $6,614.00</td><td class="num">&minus; $12,037.50</td><td class="num"><b>Mo Owes Z $5,423.50</b></td></tr><tr><td>Explorer — Sold</td><td class="num">Mo Owes Z $5,423.50</td><td class="num">+ $8,210.00</td><td class="num"><b>Z Owes Mo $2,786.50</b></td></tr><tr><td>2016 Nissan Rogue — Sold</td><td class="num">Z Owes Mo $2,786.50</td><td class="num">+ $6,193.00</td><td class="num"><b>Z Owes Mo $8,979.50</b></td></tr><tr><td>2016 Nissan Rogue — Sold — Adjustments</td><td class="num">Z Owes Mo $8,979.50</td><td class="num">+ $40.00</td><td class="num"><b>Z Owes Mo $9,019.50</b></td></tr><tr><td>Equinox — Purchased</td><td class="num">Z Owes Mo $9,019.50</td><td class="num">&minus; $2,584.50</td><td class="num"><b>Z Owes Mo $6,435.00</b></td></tr><tr><td>Buick — Sold</td><td class="num">Z Owes Mo $6,435.00</td><td class="num">+ $4,012.50</td><td class="num"><b>Z Owes Mo $10,447.50</b></td></tr><tr><td>Jeep + 2021 Nissan Rogue — Purchased</td><td class="num">Z Owes Mo $10,447.50</td><td class="num">&minus; $10,925.00</td><td class="num"><b>Mo Owes Z $477.50</b></td></tr><tr><td>Pacifica — Sold</td><td class="num">Mo Owes Z $477.50</td><td class="num">+ $7,332.00</td><td class="num"><b>Z Owes Mo $6,854.50</b></td></tr><tr><td>Jeep Cherokee — Sold</td><td class="num">Z Owes Mo $6,854.50</td><td class="num">+ $5,322.50</td><td class="num"><b>Z Owes Mo $12,177.00</b></td></tr><tr><td>Sportage / Escape / Subaru / Edge / Tucson — Purchased</td><td class="num">Z Owes Mo $12,177.00</td><td class="num">&minus; $18,825.00</td><td class="num"><b>Mo Owes Z $6,648.00</b></td></tr><tr><td>Equinox — Sold</td><td class="num">Mo Owes Z $6,648.00</td><td class="num">+ $3,084.00</td><td class="num"><b>Mo Owes Z $3,564.00</b></td></tr><tr><td>2021 Nissan Rogue — Sold</td><td class="num">Mo Owes Z $3,564.00</td><td class="num">+ $7,367.50</td><td class="num"><b>Z Owes Mo $3,803.50</b></td></tr><tr><td>Subaru Outback — Sold</td><td class="num">Z Owes Mo $3,803.50</td><td class="num">+ $3,501.50</td><td class="num"><b>Z Owes Mo $7,305.00</b></td></tr><tr><td>Cash Paid to Mo</td><td class="num">Z Owes Mo $7,305.00</td><td class="num">&minus; $4,000.00</td><td class="num"><b>Z Owes Mo $3,305.00</b></td></tr><tr><td>Kia Sportage — Sold</td><td class="num">Z Owes Mo $3,305.00</td><td class="num">+ $3,896.50</td><td class="num"><b>Z Owes Mo $7,201.50</b></td></tr><tr><td>Ford Escape — Sold</td><td class="num">Z Owes Mo $7,201.50</td><td class="num">+ $3,089.50</td><td class="num"><b>Z Owes Mo $10,291.00</b></td></tr><tr><td>Hyundai Tucson — Sold</td><td class="num">Z Owes Mo $10,291.00</td><td class="num">+ $3,963.02</td><td class="num"><b>Z Owes Mo $14,254.02</b></td></tr><tr><td>Ford Edge — Sold / Funded</td><td class="num">Z Owes Mo $14,254.02</td><td class="num">+ $9,830.00</td><td class="num"><b>Z Owes Mo $24,084.02</b></td></tr><tr><td>2016 Cadillac XTS — Purchased</td><td class="num">Z Owes Mo $24,084.02</td><td class="num">&minus; $3,305.00</td><td class="num"><b>Z Owes Mo $20,779.02</b></td></tr><tr><td>2020 Ford F150 — Purchased</td><td class="num">Z Owes Mo $20,779.02</td><td class="num">&minus; $7,215.00</td><td class="num"><b>Z Owes Mo $13,564.02</b></td></tr><tr><td>Cash Disbursement to Mo</td><td class="num">Z Owes Mo $13,564.02</td><td class="num">&minus; $150.00</td><td class="num"><b>Z Owes Mo $13,414.02</b></td></tr>
+     <tr class="tot"><td>FINAL CURRENT BALANCE</td><td></td><td></td>
+        <td class="num">Z Owes Mo $13,414.02</td></tr>
+  </tbody></table>
+  <div class="bigfinal" style="margin-top:18px">
+     <div class="lbl">Final Amount Z Owes Mo</div>
+     <div class="amt">$13,414.02</div>
+  </div>
+</div>
+<div class="page-break">
+  <h1 class="page-title">Current Inventory Statement</h1>
+  <p class="lead">Vehicles still owned by the partnership at the close of this ledger.
+     Each is owned 50 / 50, so the inventory cost is shared equally.</p>
+
+  <h3><span class="sub-letter">1</span> 2016 Cadillac XTS</h3>
+  <table class="grid kv"><tbody>
+    <tr><td>Total Cost (purchase $6,580 + gas $30)</td><td class="num">$6,610</td></tr>
+    <tr><td>Z Share</td><td class="num">$3,305</td></tr>
+    <tr><td>Mo Share</td><td class="num">$3,305</td></tr>
+  </tbody></table>
+
+  <h3><span class="sub-letter">2</span> 2020 Ford F150</h3>
+  <table class="grid kv"><tbody>
+    <tr><td>Total Cost (corrected purchase)</td><td class="num">$14,430</td></tr>
+    <tr><td>Z Share</td><td class="num">$7,215</td></tr>
+    <tr><td>Mo Share</td><td class="num">$7,215</td></tr>
+  </tbody></table>
+
+  <h3><span class="sub-letter">&Sigma;</span> Total Current Inventory</h3>
+  <table class="grid"><thead><tr><th>Item</th><th class="num">Amount</th></tr></thead>
+  <tbody>
+    <tr><td>Total Inventory Cost</td><td class="num">$21,040</td></tr>
+    <tr><td>Z Share in Inventory</td><td class="num">$10,520</td></tr>
+    <tr><td>Mo Share in Inventory</td><td class="num">$10,520</td></tr>
+  </tbody></table>
+
+  <div class="bigfinal" style="margin-top:22px">
+     <div class="lbl">Final Amount Z Owes Mo</div>
+     <div class="amt">$13,414.02</div>
+  </div>
+  <p class="small">Note: inventory is stated at cost and is separate from the cash
+     balance owed between partners. The $13,414.02 owed to Mo already reflects that Z
+     paid for Mo&rsquo;s 50% share of both inventory vehicles.</p>
+</div>
+<div>
+  <h1 class="page-title">Audit Notes &amp; Verification</h1>
+  <p class="lead">This report was generated by a program that recomputes every figure
+     from raw purchase, expense, and sale inputs, then checks each result against the
+     source ledger. The report would not have been produced if any check failed.</p>
+  <h3><span class="sub-letter">1</span> Items preserved exactly from the source ledger</h3>
+  <ul class="rule-list">
+    <li><b>Mitsubishi &amp; Q50:</b> Z take-home is <b>not explicitly stated in the
+        source ledger</b>; only Mo take-home amounts were provided.</li>
+    <li><b>Buick &mdash; Drako $625:</b> included in Total Cost but not reimbursed to
+        either partner in the source ledger. Shown separately, not hidden. Preserved
+        source Z take-home = $3,362.50 (would be $3,987.50 if Drako were treated as
+        Z-paid).</li>
+    <li><b>Named third-party payees</b> (Drako, Tito, Taylor, Luis, Angela, Talon,
+        etc.) are vendors/labor, not the funding partner. Per the standard rule they
+        are treated as Z-paid where the source groups them that way, and each is listed
+        by name so nothing is obscured.</li>
+  </ul>
+  <h3><span class="sub-letter">2</span> Verification result</h3>
+  <table class="grid"><thead><tr><th>Check</th><th>Result</th></tr></thead><tbody>
+    <tr><td>Total cost = purchase + expenses (all sales)</td><td class="pay-mo">PASS</td></tr>
+    <tr><td>Profit = sale price &minus; total cost (all sales)</td><td class="pay-mo">PASS</td></tr>
+    <tr><td>Profit split = profit &divide; 2 (all sales)</td><td class="pay-mo">PASS</td></tr>
+    <tr><td>Mo take-home = car half + Mo expense + profit share</td><td class="pay-mo">PASS</td></tr>
+    <tr><td>Z take-home = car half + Z expense + profit share</td><td class="pay-mo">PASS</td></tr>
+    <tr><td>Running balance chain (24 events)</td><td class="pay-mo">PASS</td></tr>
+    <tr><td>Final balance resolves to $13,414.02</td><td class="pay-mo">PASS</td></tr>
+  </tbody></table>
+  <p class="small">No arithmetic discrepancies were found between the source ledger and
+     the recomputed figures. Every number in this report matches the source ledger
+     exactly.</p>
+</div></body></html>

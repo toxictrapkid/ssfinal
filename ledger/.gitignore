@@ -1,0 +1,9 @@
+# Render toolchain deps (reinstalled via `npm install`)
+node_modules/
+
+# Local render/QA artifacts
+_pages/
+_pdftext.txt
+_source_ledger.txt
+_t.html
+_t.pdf
