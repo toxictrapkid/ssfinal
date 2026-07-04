@@ -179,19 +179,24 @@ def parse_mileage_text(text: str) -> int | None:
     return value if 100 <= value <= 1_500_000 else None
 
 
-def _coerce_mileage(value: Any) -> int | None:
-    """Structured mileage as int/float/numeric-string -> positive int, else None."""
-    if isinstance(value, bool):  # bool is an int subclass; never a mileage
+def _coerce_positive_int(value: Any) -> int | None:
+    """int/float/numeric-string -> positive int, else None (bools rejected)."""
+    if isinstance(value, bool):  # bool is an int subclass; never a real number here
         return None
     if isinstance(value, (int, float)):
         return int(value) if value > 0 else None
     if isinstance(value, str):
         try:
-            n = int(float(value.replace(",", "").strip()))
+            n = int(float(value.replace(",", "").replace("$", "").strip()))
         except (ValueError, TypeError):
             return None
         return n if n > 0 else None
     return None
+
+
+# mileage and price share the same "positive number, possibly float/string" shape
+_coerce_mileage = _coerce_positive_int
+_coerce_price = _coerce_positive_int
 
 
 def detect_title_status(structured: str | None, description: str | None) -> str:
@@ -342,9 +347,11 @@ def normalize_ksl(item: dict, search_zip: str = "84104") -> dict | None:
         )
 
     listing_id = item.get("id")
-    price = item.get("price")
-    if listing_id is None or not isinstance(price, (int, float)) or price <= 0:
-        log.warning("skipping malformed KSL item (id=%s, price=%s)", listing_id, price)
+    # Coerce price like mileage — the RSC stream may send it as a float or string;
+    # rejecting those dropped the ENTIRE listing (worse than a null field).
+    price = _coerce_price(item.get("price"))
+    if listing_id is None or price is None:
+        log.warning("skipping malformed KSL item (id=%s, price=%s)", listing_id, item.get("price"))
         return None
 
     def _field(name: str) -> str | None:

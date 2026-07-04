@@ -189,6 +189,21 @@ def test_coerce_mileage_accepts_float_and_string():
     assert _coerce_mileage(True) is None  # bool must never read as a mileage
 
 
+def test_string_or_float_price_does_not_drop_the_listing(ksl_items):
+    # A price delivered as a string/float must be coerced, not treated as
+    # malformed — otherwise the whole listing is silently dropped.
+    for raw in ("19500", "19,500", "$19500", 19500.0):
+        item = dict(ksl_items[0])
+        item["price"] = raw
+        normalized_item = normalize_ksl(item, search_zip="84104")
+        assert normalized_item is not None, f"dropped listing for price={raw!r}"
+        assert normalized_item["price"] == 19500
+    # a non-positive / junk price is still rejected
+    bad = dict(ksl_items[0])
+    bad["price"] = "call for price"
+    assert normalize_ksl(bad, search_zip="84104") is None
+
+
 def test_float_mileage_survives_into_dedupe_component(ksl_items):
     # A float mileage must reach the normalized output (it's a dedupe-key input),
     # not get dropped to None and force the source:id fallback key.
