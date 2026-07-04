@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Doc } from "../../convex/_generated/dataModel";
+import { safeHref } from "./lib/url";
 
 type Listing = Doc<"listings">;
 
@@ -11,22 +12,6 @@ const IMG_FALLBACK =
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#E6EAF0"/><g fill="none" stroke="#AEB7C4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" transform="translate(140,120)"><path d="M2 26l4-12a4 4 0 0 1 3.8-2.6h40.4A4 4 0 0 1 54 14l4 12"/><path d="M6 34h52"/><circle cx="14" cy="34" r="3.2"/><circle cx="46" cy="34" r="3.2"/></g><text x="200" y="205" font-family="sans-serif" font-size="14" fill="#AEB7C4" text-anchor="middle">No photo available</text></svg>'
   );
-
-/**
- * Only ever hand an http(s) URL to an <a href>. `l.url` is scraped/ingested
- * data typed merely as string, and React does NOT sanitize hrefs — a listing
- * whose url is `javascript:…` would execute in the app origin on click and can
- * exfiltrate the localStorage watchlist/notes. Anything not http(s) is made inert.
- */
-const safeHref = (u: string | null | undefined): string => {
-  if (!u) return "#";
-  try {
-    const proto = new URL(u, window.location.origin).protocol;
-    return proto === "http:" || proto === "https:" ? u : "#";
-  } catch {
-    return "#";
-  }
-};
 
 const money = (n: number | null | undefined) =>
   n == null ? "—" : "$" + Math.round(n).toLocaleString("en-US");
