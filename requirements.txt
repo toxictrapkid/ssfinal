@@ -1,0 +1,2 @@
+# Only needed for live scraping. --regen-only and the test suite run on pure stdlib.
+playwright>=1.40

@@ -11,7 +11,7 @@ Find, refresh, enrich, parse, score, and stage car deals. Create the artifacts (
 
 ## Operating rules
 1. **Read `CARHUNTER_LOOP_STATE.md` first.** Know last run, blockers, queues. Update it when you finish.
-2. **Follow the skill for the job.** Each task maps to a skill in `.claude/skills/carhunter-*`. Read it and follow it literally. Do not improvise process.
+2. **Follow the skill for the job.** Each task maps to a skill in `.claude/skills/carhunter-*` (mcp-health, feed-freshness, discovery; schedule in `carhunter/automations/SCHEDULE.md`). Read it and follow it literally. If no skill exists for a task, say so in your handoff and ask the Evaluator/owner — do not improvise process.
 3. **Numbers are sacred.** Never invent a valuation. Never use `$0` as a placeholder. Missing → write `DATA MISSING` and create a lookup task. The four required numbers are JD Clean Trade, JD Full Retail, KBB Lending, Base MMR.
 4. **You stage; the Evaluator clears.** You may create NEW Airtable records and employee tasks and DRAFT Slack alerts. You may NOT: mark a car HOT BUY / BUY CANDIDATE / REVIEW READY as final, send a Slack alert, change an existing deal's stage, or declare a loop "done." Those require the Evaluator's pass.
 5. **Never above Level 2.** No seller contact, no offers, no money, no buying, no editing production settings. If a task implies any of these, stop and flag for the owner.

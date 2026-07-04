@@ -5,13 +5,19 @@
 > Autonomy: **Level 2** (draft + create tasks + alert humans). Do not act above Level 2.
 
 ## Last Run
-date/time: 2026-06-24 — system bootstrapped (no loops executed yet)
-loop: bootstrap / install
-result: Loop system files created. Automations DEFINED but NOT yet activated. Awaiting owner go-live.
+date/time: 2026-07-04 — self-improvement pass (code review + repair)
+loop: maintenance / self-improve
+result: Scraper fully reviewed and repaired (crash on direct-results pages fixed,
+retries now real, filter notes honest, O(N²) loop removed, numpy dropped, dedupe
+on resume, CLI flags added). 25-test suite added and green. Missing infra authored:
+carhunter/{DESIGN,safety/COMMAND_ALLOWLIST,airtable/SCHEMA,automations/SCHEDULE}.md,
+skills for Loops 10/2/1, README, requirements.txt, .gitignore. Automations still
+DEFINED but NOT armed. Awaiting owner go-live.
 
 ## Current System Health
 MCP:              UNKNOWN — run Loop 10 (mcp-health) to verify
-Scraper:          carpart_scraper.py present; last run UNKNOWN
+Scraper:          carpart_scraper.py reviewed+fixed 2026-07-04; unit tests green; no live run yet
+Tests:            25/25 passing (python3 -m unittest discover -s tests)
 Feed freshness:   UNKNOWN — run Loop 2
 Airtable:         UNKNOWN — base not yet confirmed/created (see carhunter/airtable/SCHEMA.md)
 Slack:            UNKNOWN — alert channel not yet confirmed

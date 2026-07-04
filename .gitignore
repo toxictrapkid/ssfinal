@@ -1,0 +1,14 @@
+# Scraper outputs (regenerate with: python3 carpart_scraper.py --regen-only)
+carpart_results_raw.csv
+carpart_under_1500.csv
+carpart_progress.txt
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets
+.env
+.env.*

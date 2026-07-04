@@ -9,14 +9,22 @@ Flow:
   2. Submit → lands on variant selection page (radio buttons) OR direct results
   3. For each variant radio button: select it, submit, scrape prices
   4. Aggregate all prices per make/model/year/part across all variants
+
+Usage:
+  python3 carpart_scraper.py                 # full run (resumes automatically)
+  python3 carpart_scraper.py --limit 5       # smoke test: only 5 searches
+  python3 carpart_scraper.py --regen-only    # rebuild filtered CSV from raw data, no scraping
+  python3 carpart_scraper.py --headful       # visible browser window
 """
 
+import argparse
 import subprocess
 import sys
 import importlib
 import os
 import csv
 import json
+import statistics
 import time
 import random
 import logging
@@ -27,7 +35,7 @@ from pathlib import Path
 
 # ─── Auto-install missing dependencies ───────────────────────────────────────
 
-REQUIRED = {"playwright": "playwright", "numpy": "numpy"}
+REQUIRED = {"playwright": "playwright"}
 
 def auto_install():
     for import_name, pip_name in REQUIRED.items():
@@ -35,21 +43,44 @@ def auto_install():
             importlib.import_module(import_name)
         except ImportError:
             print(f"[SETUP] Installing {pip_name}...")
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", pip_name, "--quiet",
-                 "--break-system-packages"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
+            try:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", pip_name, "--quiet"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            except subprocess.CalledProcessError:
+                # Externally-managed Python (PEP 668) — retry with the override flag
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", pip_name, "--quiet",
+                     "--break-system-packages"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+    # Environments like Claude Code remote pre-install Chromium and set these
+    # vars — downloading a second copy there is wasted time and bandwidth.
+    if os.environ.get("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD") or os.environ.get("PLAYWRIGHT_BROWSERS_PATH"):
+        return
     print("[SETUP] Ensuring Playwright Chromium is installed...")
     subprocess.run(
         [sys.executable, "-m", "playwright", "install", "chromium"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
 
-auto_install()
+# Import lazily so the module can be imported (e.g. by tests, --regen-only)
+# without Playwright installed and without triggering installs at import time.
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
 
-import numpy as np
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+def ensure_playwright():
+    """Install and import Playwright on demand (only needed for live scraping)."""
+    global sync_playwright
+    if sync_playwright is not None:
+        return
+    auto_install()
+    importlib.invalidate_caches()
+    from playwright.sync_api import sync_playwright as _sp
+    sync_playwright = _sp
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -210,12 +241,15 @@ VEHICLES = [
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
 def setup_logging():
-    for name in ("activity", "errors"):
+    for name, path, level in (("activity", LOG_FILE, logging.DEBUG),
+                              ("errors", ERROR_LOG, logging.ERROR)):
         logger = logging.getLogger(name)
-        logger.setLevel(logging.DEBUG if name == "activity" else logging.ERROR)
-        fh = logging.FileHandler(LOG_FILE if name == "activity" else ERROR_LOG, mode="a")
-        fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
-        logger.addHandler(fh)
+        logger.setLevel(level)
+        logger.propagate = False
+        if not logger.handlers:
+            fh = logging.FileHandler(path, mode="a")
+            fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+            logger.addHandler(fh)
     return logging.getLogger("activity"), logging.getLogger("errors")
 
 # ─── Progress / Resume ───────────────────────────────────────────────────────
@@ -231,6 +265,8 @@ def load_progress():
 def save_progress(key):
     with open(PROGRESS_FILE, "a") as f:
         f.write(key + "\n")
+        f.flush()
+        os.fsync(f.fileno())
 
 def make_key(make, model, year, part):
     return f"{make}|{model}|{year}|{part}"
@@ -261,29 +297,34 @@ def write_raw_row(row):
         os.fsync(f.fileno())
 
 def load_raw_results():
-    """Load raw CSV, keeping each variant as its own entry."""
+    """Load raw CSV, keeping each variant as its own entry.
+
+    Duplicate (year, make, model, part, variant) rows can exist if a task was
+    re-scraped after a crash lost a progress line — the LAST row (most recent
+    scrape) wins, so stale data never double-counts in the filtered output.
+    """
     # Returns: { (year, make, model): { "Engine": [ {variant, prices, ...}, ... ], "Transmission": [...] } }
-    results = {}
+    by_variant = {}
     if not RAW_CSV.exists():
-        return results
+        return {}
     with open(RAW_CSV, "r") as f:
         for row in csv.DictReader(f):
-            key = (int(row["year"]), row["make"], row["model"])
-            part = row["part"]
-            if key not in results:
-                results[key] = {}
-            if part not in results[key]:
-                results[key][part] = []
             try:
+                key = (int(row["year"]), row["make"], row["model"])
+                part = row["part"]
+                variant = row.get("variant", "unknown")
                 prices = json.loads(row["prices"]) if row["prices"] else []
-                results[key][part].append({
-                    "variant": row.get("variant", "unknown"),
+                by_variant.setdefault(key, {}).setdefault(part, {})[variant] = {
+                    "variant": variant,
                     "prices": prices,
                     "num_listings": int(row["num_listings"] or 0),
-                })
+                }
             except Exception:
                 pass
-    return results
+    return {
+        key: {part: list(variants.values()) for part, variants in parts.items()}
+        for key, parts in by_variant.items()
+    }
 
 def generate_filtered_csv():
     """
@@ -357,23 +398,23 @@ def generate_filtered_csv():
 # ─── Statistics ───────────────────────────────────────────────────────────────
 
 def calc_stats(prices):
+    """Return (mean, median, min, max, count) with >2-sigma outliers dropped.
+
+    Pure stdlib — statistics.pstdev matches numpy's default population std.
+    """
     if not prices:
         return None, None, None, None, 0
-    arr = np.array(prices, dtype=float)
-    if len(arr) == 1:
-        v = float(arr[0])
-        return v, v, v, v, 1
-    if len(arr) == 2:
-        return float(np.mean(arr)), float(np.median(arr)), float(np.min(arr)), float(np.max(arr)), 2
-    mean, std = np.mean(arr), np.std(arr)
-    if std > 0:
-        filtered = arr[np.abs(arr - mean) <= 2 * std]
-        if len(filtered) == 0:
-            filtered = arr
-    else:
-        filtered = arr
-    return (float(np.mean(filtered)), float(np.median(filtered)),
-            float(np.min(filtered)), float(np.max(filtered)), int(len(filtered)))
+    vals = [float(p) for p in prices]
+    if len(vals) <= 2:
+        return (statistics.mean(vals), statistics.median(vals),
+                min(vals), max(vals), len(vals))
+    mean = statistics.mean(vals)
+    std = statistics.pstdev(vals)
+    filtered = [v for v in vals if abs(v - mean) <= 2 * std] if std > 0 else vals
+    if not filtered:
+        filtered = vals
+    return (statistics.mean(filtered), statistics.median(filtered),
+            min(filtered), max(filtered), len(filtered))
 
 # ─── Price extraction ─────────────────────────────────────────────────────────
 
@@ -390,14 +431,6 @@ LISTING_RE = re.compile(
     r'([ABCX])\s+'           # grade (captured group 2)
     r'\S+\s+'                # stock number
     r'\$([\d,]+(?:\.\d{1,2})?)',  # price (captured group 3)
-    re.IGNORECASE
-)
-
-# Some listings show grade X with no miles — pattern: [grade] [stock] $[price]
-LISTING_NO_MILES_RE = re.compile(
-    r'\b([ABCX])\s+'          # grade
-    r'\S+\s+'                  # stock
-    r'\$([\d,]+(?:\.\d{1,2})?)',   # price
     re.IGNORECASE
 )
 
@@ -438,33 +471,40 @@ def extract_all_prices(text):
             pass
     return prices
 
+def extract_prices_from_text(text, log=None):
+    """
+    Extract prices from results-page text.
+    Primary: Grade A, under 100k miles only.
+    Fallback: all prices on the page if no Grade-A <100k listing matched.
+    Returns (prices, filter_note) — the note records which path produced the
+    data so the CSV never claims fallback prices were grade-filtered.
+    """
+    prices = extract_filtered_prices(text, max_miles=100000, target_grade="A")
+    if prices:
+        if log:
+            log.info(f"  Extracted {len(prices)} Grade-A <100k prices")
+        return prices, "Grade-A <100k"
+
+    prices = extract_all_prices(text)
+    if prices:
+        if log:
+            log.info(f"  Fallback: extracted {len(prices)} total prices (no Grade-A <100k found)")
+        return prices, "unfiltered fallback"
+
+    if log:
+        log.info("  No prices found on results page")
+    return [], "no results"
+
 def is_variant_page(page):
     """Check if current page is the variant-selection (radio button) page."""
     radios = page.query_selector_all('input[name="dummyVar"]')
     return len(radios) > 0
 
 def scrape_results_page(page, log):
-    """
-    Extract prices from results page.
-    Primary: Grade A, under 100k miles only.
-    Fallback: all prices if no Grade A under 100k found.
-    """
+    """Extract (prices, filter_note) from the currently-loaded results page."""
     time.sleep(2)
     text = page.inner_text("body")
-
-    # Primary: filtered by grade A + under 100k miles
-    prices = extract_filtered_prices(text, max_miles=100000, target_grade="A")
-    if prices:
-        log.info(f"  Extracted {len(prices)} Grade-A <100k prices")
-        return prices
-
-    # Fallback: if no grade A under 100k, try all prices
-    prices = extract_all_prices(text)
-    if prices:
-        log.info(f"  Fallback: extracted {len(prices)} total prices (no Grade-A <100k found)")
-    else:
-        log.info(f"  No prices found on results page")
-    return prices
+    return extract_prices_from_text(text, log)
 
 # ─── Core search logic ────────────────────────────────────────────────────────
 
@@ -482,21 +522,27 @@ def fill_and_submit_homepage(page, year, model_value, part, log):
     try:
         page.select_option('select[name="userModel"]', model_value)
     except Exception:
-        # Try fuzzy: find option whose text contains our value
+        # Fuzzy fallback: exact text match beats prefix match beats substring,
+        # so "Ford Ranger" can't grab e.g. "Ford Ranger EV" when both exist.
         options = page.query_selector_all('select[name="userModel"] option')
-        matched = False
         model_lower = model_value.lower()
+        exact, prefix, substr = None, None, None
         for opt in options:
             opt_text = (opt.inner_text() or "").strip()
             opt_val  = (opt.get_attribute("value") or "").strip()
-            if model_lower in opt_text.lower() or model_lower in opt_val.lower():
-                page.select_option('select[name="userModel"]', value=opt_val)
-                log.info(f"  Fuzzy matched model: {opt_val}")
-                matched = True
-                break
-        if not matched:
+            for cand in (opt_text.lower(), opt_val.lower()):
+                if cand == model_lower:
+                    exact = exact or opt_val
+                elif cand.startswith(model_lower):
+                    prefix = prefix or opt_val
+                elif model_lower in cand:
+                    substr = substr or opt_val
+        best = exact or prefix or substr
+        if best is None:
             log.warning(f"  Could not find model '{model_value}' in dropdown")
             return False
+        page.select_option('select[name="userModel"]', value=best)
+        log.info(f"  Fuzzy matched model: {best}")
     time.sleep(0.5)
 
     # Part
@@ -525,11 +571,13 @@ def fill_and_submit_homepage(page, year, model_value, part, log):
     time.sleep(3)
     return True
 
-def scrape_all_variants(page, log):
+def scrape_all_variants(page, log, resubmit=None):
     """
     On the variant page, iterate through each radio button variant:
       - check it, submit the form, scrape prices, go back, repeat.
-    Returns dict: {variant_label: [prices]}
+    `resubmit` re-runs the homepage search if back-navigation loses the
+    variant page (the variant form is a POST, so history can expire).
+    Returns dict: {variant_label: {"prices": [...], "note": filter_note}}
     """
     results = {}
 
@@ -555,7 +603,11 @@ def scrape_all_variants(page, log):
                 label = r.evaluate("el => el.parentElement.innerText.trim()")
         except Exception:
             label = f"variant_{i}"
-        variant_info.append((i, val, label[:120]))
+        label = label[:120] or f"variant_{i}"
+        # Two radios can render the same label text — keep both distinct
+        if label in (v[2] for v in variant_info):
+            label = f"{label} #{i}"
+        variant_info.append((i, val, label))
 
     log.info(f"  Found {len(variant_info)} variants to scrape")
 
@@ -563,14 +615,22 @@ def scrape_all_variants(page, log):
         try:
             log.info(f"  Variant {idx+1}/{len(variant_info)}: {label}")
 
-            # Re-query radios (page may have reloaded)
+            # Re-query radios (page may have reloaded). Match by value —
+            # positional index breaks if the reloaded page reorders options.
             radios = page.query_selector_all('input[name="dummyVar"]')
-            if radio_idx >= len(radios):
-                log.warning(f"  Radio index {radio_idx} out of range, skipping")
+            target = None
+            for r in radios:
+                if (r.get_attribute("value") or "") == radio_val:
+                    target = r
+                    break
+            if target is None and radio_idx < len(radios):
+                target = radios[radio_idx]
+            if target is None:
+                log.warning(f"  Variant radio '{label}' not found on page, skipping")
                 continue
 
             # Check this radio button
-            radios[radio_idx].check()
+            target.check()
             time.sleep(0.5)
 
             # Submit the form
@@ -588,14 +648,22 @@ def scrape_all_variants(page, log):
             time.sleep(3)
 
             # Now we should be on the results page — scrape prices
-            prices = scrape_results_page(page, log)
-            results[label] = prices
+            prices, note = scrape_results_page(page, log)
+            results[label] = {"prices": prices, "note": note}
 
             # Go back to variant page for next variant
             if idx < len(variant_info) - 1:
                 page.go_back(timeout=PAGE_TIMEOUT)
                 page.wait_for_load_state("domcontentloaded", timeout=PAGE_TIMEOUT)
                 time.sleep(2)
+                if not is_variant_page(page) and resubmit is not None:
+                    # POST history expired — redo the search to get the
+                    # variant page back instead of silently dropping the rest.
+                    log.info("  Variant page lost after go_back — resubmitting search")
+                    resubmit()
+                    if not is_variant_page(page):
+                        log.warning("  Could not recover variant page; stopping variant iteration")
+                        break
 
             # Polite delay between variant requests
             time.sleep(random.uniform(2, 4))
@@ -611,50 +679,43 @@ def scrape_all_variants(page, log):
 
     return results
 
-def perform_search(page, year, model_value, part, display_make, display_model, log, error_log):
+def perform_search(page, year, model_value, part, log):
     """
     Full search flow:
       1. Fill homepage → submit
       2. If variant page → scrape each variant
       3. If direct results → scrape prices
-    Returns: (all_prices_list, variant_details_dict)
+    Returns: (all_prices_list, variant_details_dict, fail_reason_or_None)
+
+    Exceptions (timeouts, navigation errors) propagate to the caller so its
+    retry loop actually runs — a transient network failure must NOT be
+    recorded as a permanent "no results".
     """
     all_prices = []
     variant_details = {}
 
-    try:
-        ok = fill_and_submit_homepage(page, year, model_value, part, log)
-        if not ok:
-            return all_prices, variant_details
+    ok = fill_and_submit_homepage(page, year, model_value, part, log)
+    if not ok:
+        return all_prices, variant_details, "model not found in dropdown"
 
-        # Check what page we landed on
-        if is_variant_page(page):
-            log.info(f"  Variant selection page detected")
-            variant_details = scrape_all_variants(page, log)
-            for label, prices in variant_details.items():
-                all_prices.extend(prices)
+    # Check what page we landed on
+    if is_variant_page(page):
+        log.info(f"  Variant selection page detected")
+        resubmit = lambda: fill_and_submit_homepage(page, year, model_value, part, log)
+        variant_details = scrape_all_variants(page, log, resubmit)
+        for label, vd in variant_details.items():
+            all_prices.extend(vd["prices"])
+    else:
+        # Might be direct results or no-results page
+        prices, note = extract_prices_from_text(page.inner_text("body"), log)
+        if prices:
+            log.info(f"  Direct results: {len(prices)} prices")
+            all_prices = prices
+            variant_details["direct"] = {"prices": prices, "note": note}
         else:
-            # Might be direct results or no-results page
-            text = page.inner_text("body")
-            prices = extract_prices_from_text(text)
-            if prices:
-                log.info(f"  Direct results: {len(prices)} prices")
-                all_prices = prices
-                variant_details["direct"] = prices
-            else:
-                log.info(f"  No prices found (no results or unrecognized page)")
+            log.info(f"  No prices found (no results or unrecognized page)")
 
-    except PlaywrightTimeout as e:
-        log.warning(f"  Timeout: {e}")
-        error_log.error(f"Timeout: {year} {display_make} {display_model} {part}: {e}")
-    except Exception as e:
-        log.warning(f"  Error: {e}")
-        error_log.error(
-            f"Error: {year} {display_make} {display_model} {part}: {e}\n"
-            f"{traceback.format_exc()}"
-        )
-
-    return all_prices, variant_details
+    return all_prices, variant_details, None
 
 # ─── Build task list ──────────────────────────────────────────────────────────
 
@@ -666,10 +727,90 @@ def build_tasks():
                 tasks.append((model_val, make, model, year, part))
     return tasks
 
+# ─── Qualifying count ─────────────────────────────────────────────────────────
+
+def count_qualifying(raw):
+    """Vehicles with at least one engine+trans variant pair, both avg ≤ $1,500
+    with 3+ listings each. Operates on the in-memory results dict."""
+    qualifying = 0
+    for _key, pd in raw.items():
+        found = False
+        for ev in pd.get("Engine", []):
+            ea, _, _, _, en = calc_stats(ev["prices"])
+            if not ea or en < 3 or ea > 1500:
+                continue
+            for tv in pd.get("Transmission", []):
+                ta, _, _, _, tn = calc_stats(tv["prices"])
+                if ta and tn >= 3 and ta <= 1500:
+                    found = True
+                    break
+            if found:
+                break
+        if found:
+            qualifying += 1
+    return qualifying
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(description="Car-Part.com engine/transmission price scraper")
+    p.add_argument("--limit", type=int, default=0, metavar="N",
+                   help="stop after N searches this run (smoke test)")
+    p.add_argument("--regen-only", action="store_true",
+                   help="regenerate the filtered CSV from existing raw data and exit (no scraping)")
+    p.add_argument("--headful", action="store_true",
+                   help="run the browser with a visible window")
+    return p.parse_args(argv)
+
+def write_task_rows(year, make, model, part, variant_details, fail_reason):
+    """Write one raw-CSV row per variant (or a single placeholder row).
+    Returns the entries list mirroring what load_raw_results would produce."""
+    entries = []
+    if variant_details:
+        for variant_label, vd in variant_details.items():
+            prices, note = vd["prices"], vd["note"]
+            avg, med, mn, mx, count = calc_stats(prices)
+            write_raw_row({
+                "year": year, "make": make, "model": model, "part": part,
+                "variant": variant_label,
+                "num_listings": count,
+                "prices": json.dumps(prices[:100]),
+                "avg_price": round(avg, 2) if avg is not None else "",
+                "median_price": round(med, 2) if med is not None else "",
+                "min_price": round(mn, 2) if mn is not None else "",
+                "max_price": round(mx, 2) if mx is not None else "",
+                "filter_note": note,
+                "timestamp": datetime.now().isoformat(),
+            })
+            entries.append({"variant": variant_label, "prices": prices[:100],
+                            "num_listings": count})
+    else:
+        # Distinguish a real empty result from an infrastructure failure —
+        # "error" rows are greppable and never look like verified market data.
+        note = fail_reason or "no results"
+        write_raw_row({
+            "year": year, "make": make, "model": model, "part": part,
+            "variant": "none",
+            "num_listings": 0,
+            "prices": "[]",
+            "avg_price": "", "median_price": "", "min_price": "", "max_price": "",
+            "filter_note": note,
+            "timestamp": datetime.now().isoformat(),
+        })
+        entries.append({"variant": "none", "prices": [], "num_listings": 0})
+    return entries
+
 def main():
+    args = parse_args()
     log, error_log = setup_logging()
+
+    if args.regen_only:
+        print("Regenerating filtered CSV from existing raw data...")
+        filtered = generate_filtered_csv()
+        print_final(len(build_tasks()), filtered, 0)
+        return
+
+    ensure_playwright()
     log.info("=" * 60)
     log.info("Car-Part.com Scraper v2 starting")
     log.info("=" * 60)
@@ -681,13 +822,15 @@ def main():
     total = len(tasks)
     remaining = [t for t in tasks if make_key(t[1], t[2], t[3], t[4]) not in completed]
     done_count = total - len(remaining)
+    if args.limit > 0:
+        remaining = remaining[:args.limit]
 
     print(f"\n{'='*60}")
     print(f"  CAR-PART.COM USED AUTO PARTS PRICE SCRAPER v2")
     print(f"{'='*60}")
     print(f"  Total search tasks:    {total}")
     print(f"  Already completed:     {done_count}")
-    print(f"  Remaining:             {len(remaining)}")
+    print(f"  Remaining this run:    {len(remaining)}")
     print(f"  Est. time (@ ~15s avg): {len(remaining) * 15 / 3600:.1f} hours")
     print(f"{'='*60}\n")
 
@@ -697,143 +840,107 @@ def main():
         print_final(total, filtered, 0)
         return
 
+    # Load once; kept up to date in memory so the progress display never has
+    # to re-read the (growing) raw CSV on every iteration.
+    raw_results = load_raw_results()
+
     start = time.time()
     searches = 0
-    qualifying = 0
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(
-            headless=True,
+            headless=not args.headful,
             args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage",
                   "--disable-gpu", "--no-zygote", "--disable-blink-features=AutomationControlled"],
         )
-        ctx = browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-        )
-        ctx.route("**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2,ttf,eot}",
-                   lambda route: route.abort())
-        page = ctx.new_page()
-        page.set_default_timeout(PAGE_TIMEOUT)
+        try:
+            ctx = browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            )
+            ctx.route("**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2,ttf,eot}",
+                       lambda route: route.abort())
+            page = ctx.new_page()
+            page.set_default_timeout(PAGE_TIMEOUT)
 
-        for model_val, make, model, year, part in remaining:
-            key = make_key(make, model, year, part)
-            log.info(f"Searching: {year} {make} {model} - {part}")
+            for model_val, make, model, year, part in remaining:
+                key = make_key(make, model, year, part)
+                log.info(f"Searching: {year} {make} {model} - {part}")
 
-            all_prices = []
-            variant_details = {}
+                all_prices = []
+                variant_details = {}
+                fail_reason = None
 
-            for attempt in range(1, MAX_RETRIES + 1):
-                try:
-                    all_prices, variant_details = perform_search(
-                        page, year, model_val, part, make, model, log, error_log
-                    )
-                    break
-                except Exception as e:
-                    error_log.error(
-                        f"Attempt {attempt}/{MAX_RETRIES}: {year} {make} {model} {part}: "
-                        f"{e}\n{traceback.format_exc()}"
-                    )
-                    if attempt < MAX_RETRIES:
-                        log.info(f"  Retrying in {RETRY_WAIT}s...")
-                        time.sleep(RETRY_WAIT)
-                        try:
-                            page.close()
-                        except Exception:
-                            pass
-                        page = ctx.new_page()
-                        page.set_default_timeout(PAGE_TIMEOUT)
-
-            # Write ONE ROW PER VARIANT so each engine/trans type has its own average
-            if variant_details:
-                for variant_label, prices in variant_details.items():
-                    avg, med, mn, mx, count = calc_stats(prices)
-                    filter_note = "Grade-A <100k" if prices else "no results"
-                    row = {
-                        "year": year, "make": make, "model": model, "part": part,
-                        "variant": variant_label,
-                        "num_listings": count,
-                        "prices": json.dumps(prices[:100]),
-                        "avg_price": round(avg, 2) if avg is not None else "",
-                        "median_price": round(med, 2) if med is not None else "",
-                        "min_price": round(mn, 2) if mn is not None else "",
-                        "max_price": round(mx, 2) if mx is not None else "",
-                        "filter_note": filter_note,
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                    write_raw_row(row)
-            else:
-                # No variants found (no results page) — write a single empty row
-                row = {
-                    "year": year, "make": make, "model": model, "part": part,
-                    "variant": "none",
-                    "num_listings": 0,
-                    "prices": "[]",
-                    "avg_price": "", "median_price": "", "min_price": "", "max_price": "",
-                    "filter_note": "no results",
-                    "timestamp": datetime.now().isoformat(),
-                }
-                write_raw_row(row)
-
-            save_progress(key)
-
-            # For logging/progress, compute overall stats
-            avg, med, mn, mx, count = calc_stats(all_prices)
-
-            searches += 1
-            total_done = done_count + searches
-
-            # Qualifying count — check if any engine+trans variant combo qualifies
-            raw = load_raw_results()
-            qualifying = 0
-            for (y, mk, md), pd in raw.items():
-                eng_list = pd.get("Engine", [])
-                trn_list = pd.get("Transmission", [])
-                found = False
-                for ev in eng_list:
-                    ea, _, _, _, en = calc_stats(ev["prices"])
-                    if not ea or en < 3 or ea > 1500:
-                        continue
-                    for tv in trn_list:
-                        ta, _, _, _, tn = calc_stats(tv["prices"])
-                        if ta and tn >= 3 and ta <= 1500:
-                            found = True
-                            break
-                    if found:
+                for attempt in range(1, MAX_RETRIES + 1):
+                    try:
+                        all_prices, variant_details, fail_reason = perform_search(
+                            page, year, model_val, part, log
+                        )
                         break
-                if found:
-                    qualifying += 1
+                    except Exception as e:
+                        log.warning(f"  Attempt {attempt}/{MAX_RETRIES} failed: {e}")
+                        error_log.error(
+                            f"Attempt {attempt}/{MAX_RETRIES}: {year} {make} {model} {part}: "
+                            f"{e}\n{traceback.format_exc()}"
+                        )
+                        if attempt < MAX_RETRIES:
+                            log.info(f"  Retrying in {RETRY_WAIT}s...")
+                            time.sleep(RETRY_WAIT)
+                            try:
+                                page.close()
+                            except Exception:
+                                pass
+                            page = ctx.new_page()
+                            page.set_default_timeout(PAGE_TIMEOUT)
+                        else:
+                            fail_reason = "error - all retries failed (see error log)"
 
-            # Progress
-            if searches % PROGRESS_EVERY == 0:
-                elapsed = time.time() - start
-                avg_t = elapsed / searches
-                rem = len(remaining) - searches
-                est_h = (rem * avg_t) / 3600
+                # Write ONE ROW PER VARIANT so each engine/trans type has its own average
+                entries = write_task_rows(year, make, model, part, variant_details, fail_reason)
+                raw_results.setdefault((year, make, model), {})[part] = entries
+                save_progress(key)
 
-                print(f"\n--- Progress [{total_done}/{total}] ---")
-                print(f"  Remaining:  {rem}")
-                print(f"  Est. left:  {est_h:.1f} hours")
-                print(f"  Qualifying: {qualifying}")
+                # For logging/progress, compute overall stats
+                avg, _med, _mn, _mx, count = calc_stats(all_prices)
+
+                searches += 1
+                total_done = done_count + searches
+
+                # Progress
+                if searches % PROGRESS_EVERY == 0:
+                    elapsed = time.time() - start
+                    avg_t = elapsed / searches
+                    rem = len(remaining) - searches
+                    est_h = (rem * avg_t) / 3600
+
+                    print(f"\n--- Progress [{total_done}/{total}] ---")
+                    print(f"  Remaining:  {rem}")
+                    print(f"  Est. left:  {est_h:.1f} hours")
+                    print(f"  Qualifying: {count_qualifying(raw_results)}")
+                    if avg is not None:
+                        print(f"  Last: {year} {make} {model} {part} → {count} listings, avg=${avg:.0f}")
+                    else:
+                        print(f"  Last: {year} {make} {model} {part} → no results")
+                    print(f"---\n")
+
                 if avg is not None:
-                    print(f"  Last: {year} {make} {model} {part} → {count} listings, avg=${avg:.0f}")
+                    log.info(f"Result: {year} {make} {model} {part} → {count} listings, avg=${avg:.0f}")
                 else:
-                    print(f"  Last: {year} {make} {model} {part} → no results")
-                print(f"---\n")
+                    log.info(f"Result: {year} {make} {model} {part} → no results")
 
-            if avg is not None:
-                log.info(f"Result: {year} {make} {model} {part} → {count} listings, avg=${avg:.0f}")
-            else:
-                log.info(f"Result: {year} {make} {model} {part} → no results")
-
-            # Delay
-            time.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
-
-        browser.close()
+                # Delay
+                time.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
+        except KeyboardInterrupt:
+            # Progress is flushed per-task, so a Ctrl-C loses nothing —
+            # fall through to regenerate the filtered CSV from what we have.
+            print("\nInterrupted — progress saved. Re-run to resume where you left off.")
+            log.info("Interrupted by user; exiting cleanly.")
+        finally:
+            browser.close()
 
     print("\nGenerating filtered CSV...")
     filtered = generate_filtered_csv()
