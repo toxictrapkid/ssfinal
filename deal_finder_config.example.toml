@@ -1,0 +1,59 @@
+# AI Deal Finder configuration
+# Copy to deal_finder_config.toml and edit. Do NOT commit real API keys —
+# leave api_key unset (or use "env:VAR_NAME") and export the key as an
+# environment variable instead.
+#
+# Schema follows BoPeng/ai-marketplace-monitor: [ai.X] backends are tried in
+# the order they appear (first success wins); each [item.X] is a saved search
+# with its own criteria and rating threshold.
+
+# ─── AI backends ──────────────────────────────────────────────────────────────
+
+[ai.claude]
+provider = "anthropic"
+# api_key = "env:ANTHROPIC_API_KEY"   # default — reads ANTHROPIC_API_KEY
+model = "claude-sonnet-5"
+max_retries = 3
+timeout = 120
+
+# [ai.openai]
+# provider = "openai"
+# api_key = "env:OPENAI_API_KEY"
+# model = "gpt-4o"
+
+# [ai.deepseek]
+# provider = "deepseek"
+# api_key = "env:DEEPSEEK_API_KEY"
+# model = "deepseek-chat"
+
+# [ai.local]                          # self-hosted, no key needed
+# provider = "ollama"
+# base_url = "http://localhost:11434/v1"
+# model = "deepseek-r1:14b"
+
+# ─── Saved searches ───────────────────────────────────────────────────────────
+
+[item.mechanic_special]
+search_phrases = ["mechanic special", "needs engine", "needs transmission", "blown motor"]
+description = """A 2012-2023 mainstream vehicle (Honda, Toyota, Nissan, Ford,
+Chevrolet, etc.) that needs an engine or transmission, priced low enough that
+after installing used Grade-A replacement parts it can be resold at a profit.
+Clean title strongly preferred. Body and interior should be in decent shape —
+the only major problem should be the drivetrain."""
+# keywords supports boolean expressions, e.g. "('needs engine' OR 'blown motor') AND title"
+antikeywords = ["parts only", "scrap", "crushed", "no title", "salvage title", "flood"]
+min_price = 200
+max_price = 4000
+rating = 4          # only alert on AI rating >= 4 (Good match / Great deal)
+# exclude_sellers = ["some dealer"]
+# ai = ["claude"]   # restrict/order backends for this item
+# extra_prompt = "Weigh Kansas City area resale demand heavily."
+
+[item.clean_flip]
+search_phrases = ["clean title runs and drives"]
+description = """A running, driving 2012+ vehicle priced well below market
+value, clean title, suitable for a quick resale with minimal reconditioning."""
+antikeywords = ["salvage", "rebuilt", "no title", "parts only"]
+min_price = 1000
+max_price = 8000
+rating = 4

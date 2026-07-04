@@ -1,0 +1,19 @@
+# Deal finder runtime artifacts — never commit (config may hold API keys)
+deal_finder_config.toml
+deal_finder_cache.json
+deal_finder_results.json
+
+# Scraper runtime artifacts
+carpart_results_raw.csv
+carpart_under_1500.csv
+carpart_progress.txt
+carpart_scraper.log
+carpart_errors.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env.*

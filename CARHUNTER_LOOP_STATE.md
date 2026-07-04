@@ -12,6 +12,7 @@ result: Loop system files created. Automations DEFINED but NOT yet activated. Aw
 ## Current System Health
 MCP:              UNKNOWN — run Loop 10 (mcp-health) to verify
 Scraper:          carpart_scraper.py present; last run UNKNOWN
+AI deal finder:   ai_deal_finder.py present (offline tests pass); not yet configured — needs deal_finder_config.toml + ANTHROPIC_API_KEY (see AI_DEAL_FINDER.md)
 Feed freshness:   UNKNOWN — run Loop 2
 Airtable:         UNKNOWN — base not yet confirmed/created (see carhunter/airtable/SCHEMA.md)
 Slack:            UNKNOWN — alert channel not yet confirmed
