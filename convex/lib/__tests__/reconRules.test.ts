@@ -170,3 +170,28 @@ describe("§4 non-drivetrain bumps as written (rule 5)", () => {
     expect(result.reconSource).toBe("parts");
   });
 });
+
+describe("check-engine bump vs. the priced drivetrain job", () => {
+  it("transmission job + an unrelated CEL still adds +600 (a trans repair doesn't cover an engine-side light)", () => {
+    const result = clean({ description: "needs transmission, and the check engine light is on" });
+    expect(result.estRecon).toBe(400 + 1450 + 900 + 600);
+    expect(result.reconSource).toBe("parts");
+  });
+  it("engine job + CEL does NOT double-count the +600 (the engine repair subsumes it)", () => {
+    const result = clean({ description: "blown engine; check engine light on" });
+    expect(result.estRecon).toBe(400 + 2639 + 1300);
+  });
+  it("keyword-only engine failure (no parts data) + CEL still suppresses the +600", () => {
+    const result = clean({
+      description: "blown engine, check engine light on",
+      engineCost: null,
+      transmissionCost: null,
+    });
+    expect(result.estRecon).toBe(400 + 2000); // flat doesn't-start bump, no extra CEL
+    expect(result.reconSource).toBe("keyword");
+  });
+  it("a CEL with no drivetrain failure still adds +600", () => {
+    const result = clean({ description: "check engine light on, otherwise runs fine" });
+    expect(result.estRecon).toBe(400 + 600);
+  });
+});

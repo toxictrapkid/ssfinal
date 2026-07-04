@@ -9,6 +9,7 @@ import { internalAction, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
+import { slackEscape } from "./lib/slackText";
 
 const MTA_SEND = "https://api.mobile-text-alerts.com/v3/send";
 
@@ -73,12 +74,13 @@ export const sendSlackAlert = internalAction({
     if (!l) return { sent: false, reason: "listing gone" };
 
     const fmt = (n: number | undefined | null) => (n != null ? "$" + Math.round(n).toLocaleString("en-US") : "n/a");
-    const title = l.title || [l.year, l.make, l.model, l.trim].filter(Boolean).join(" ");
+    // Escape scraped text before it enters the Slack payload (mrkdwn injection).
+    const title = slackEscape(l.title || [l.year, l.make, l.model, l.trim].filter(Boolean).join(" "));
     const miles = l.mileage != null ? l.mileage.toLocaleString("en-US") + " mi" : "? mi";
     const header = `${l.hot ? ":fire: HOT DEAL" : "New deal"}: ${title}`;
     const lines = [
       `*${header}*`,
-      `Price *${fmt(l.price)}*  |  ${miles}  |  ${l.titleStatus ?? "?"}  |  ${l.location ?? "?"}`,
+      `Price *${fmt(l.price)}*  |  ${miles}  |  ${slackEscape(l.titleStatus ?? "?")}  |  ${slackEscape(l.location ?? "?")}`,
       `Est value ${fmt(l.estValue)}  |  Est profit *${fmt(l.estProfit)}*  |  Score ${l.dealScore ?? "?"}` +
         (l.mechanicSpecial ? "  |  :wrench: mechanic special" : ""),
       `JD clean ${fmt(l.carblyJdCleanTrade)}  |  KBB ${fmt(l.carblyKbbLending)}`,

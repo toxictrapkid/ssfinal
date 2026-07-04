@@ -12,7 +12,7 @@ import { query, mutation, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { QueryCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { buildReport } from "./valuations";
 
 function authed(secret: string | undefined): boolean {
@@ -116,8 +116,14 @@ export const searchListings = query({
   },
 });
 
-async function resolve(ctx: QueryCtx, vin?: string, listingId?: string) {
-  if (listingId) return ctx.db.get(listingId as any);
+async function resolve(
+  ctx: QueryCtx,
+  vin?: string,
+  listingId?: string
+): Promise<Doc<"listings"> | null> {
+  // Typed as a listings doc (not the all-tables union ctx.db.get infers from an
+  // `any` id) so callers can read .year/.make/.description without TS widening.
+  if (listingId) return await ctx.db.get(listingId as Id<"listings">);
   if (vin) {
     const all = await ctx.db.query("listings").withIndex("by_status").collect();
     return all.find((l) => (l.vin ?? "").toUpperCase() === vin.toUpperCase()) ?? null;

@@ -114,19 +114,28 @@ def parse_title(title: str) -> dict[str, Any]:
     if year_match:
         out["year"] = int(year_match.group(1))
 
-    # find the make anywhere in the title
+    # Find the make with the EARLIEST occurrence in the title — not the first in
+    # dict-iteration order. Otherwise a common English word that happens to be a
+    # marque ("Seat", "Smart") preempts the real make appearing earlier in the
+    # string, e.g. "2018 Honda Accord with new leather seat" -> make "Seat".
+    # Ties at the same position prefer the longer token so multi-word marques win.
     rest = ""
     lowered = f" {text.lower()} "
+    best_idx = -1
+    best_token = ""
+    best_brand: str | None = None
     for token, brand in [(b.lower(), b) for b in CAR_BRANDS] + list(
         (a, b) for a, b in BRAND_ALIASES.items()
     ):
         idx = lowered.find(f" {token} ")
-        if idx >= 0:
-            out["make"] = brand if brand in CAR_BRANDS else _normalize_brand(brand)
-            rest = text[idx + len(token) + 1 :].strip()
-            break
-    if not out["make"]:
+        if idx < 0:
+            continue
+        if best_idx == -1 or idx < best_idx or (idx == best_idx and len(token) > len(best_token)):
+            best_idx, best_token, best_brand = idx, token, brand
+    if best_brand is None:
         return out
+    out["make"] = best_brand if best_brand in CAR_BRANDS else _normalize_brand(best_brand)
+    rest = text[best_idx + len(best_token) + 1 :].strip()
 
     # longest model name first so multi-word models win
     models = sorted(CAR_BRANDS.get(out["make"], []), key=len, reverse=True)
@@ -170,6 +179,21 @@ def parse_mileage_text(text: str) -> int | None:
     return value if 100 <= value <= 1_500_000 else None
 
 
+def _coerce_mileage(value: Any) -> int | None:
+    """Structured mileage as int/float/numeric-string -> positive int, else None."""
+    if isinstance(value, bool):  # bool is an int subclass; never a mileage
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value > 0 else None
+    if isinstance(value, str):
+        try:
+            n = int(float(value.replace(",", "").strip()))
+        except (ValueError, TypeError):
+            return None
+        return n if n > 0 else None
+    return None
+
+
 def detect_title_status(structured: str | None, description: str | None) -> str:
     """Structured field wins; description keywords fill the gaps; else unknown."""
     if structured:
@@ -186,8 +210,17 @@ def detect_title_status(structured: str | None, description: str | None) -> str:
 
 
 def looks_like_dealer(seller_type: str | None, description: str | None) -> bool:
-    """RULES #4: private-party only. Structured sellerType plus phrase heuristics."""
-    if seller_type and seller_type.strip().lower() in ("dealership", "dealer"):
+    """RULES #4: private-party only. Structured sellerType plus phrase heuristics.
+
+    The structured check matches ANY sellerType containing "dealer" — not just the
+    exact tokens "dealership"/"dealer" — so variants KSL may emit ("Certified
+    Dealer", "Franchise Dealer", "DEALERSHIP INC") are caught too. On the live Web
+    Unlocker path the search page omits the description, so this structured signal
+    is the only dealer gate; missing a dealer variant would leak it into the feed.
+    KSL's FSBO value ("For Sale By Owner") contains no "dealer", so this never
+    mislabels a private seller.
+    """
+    if seller_type and "dealer" in seller_type.strip().lower():
         return True
     text = (description or "").lower()
     return any(phrase in text for phrase in DEALER_PHRASES)
@@ -256,10 +289,34 @@ def _ksl_photos(raw_photo: Any) -> list[str]:
 
 
 def _epoch_ms(value: Any) -> int | None:
-    """KSL timestamps appear as epoch seconds or ms; normalize to ms."""
-    if not isinstance(value, (int, float)) or value <= 0:
+    """KSL timestamps appear as epoch seconds/ms OR ISO-8601 strings; -> ms.
+
+    The legacy JSON API returned numeric epochs, but the Web Unlocker RSC stream
+    delivers ISO strings ("2024-06-07T12:00:00Z"). Without parsing those, postedAt
+    is null and daysListed anchors to firstSeenAt=now — a 60-day-old car shows 0
+    days on market, corrupting the maxDaysListed filter and the freshness score.
+    """
+    if isinstance(value, bool):
         return None
-    return int(value if value > 1_000_000_000_000 else value * 1000)
+    if isinstance(value, (int, float)):
+        return int(value if value > 1_000_000_000_000 else value * 1000) if value > 0 else None
+    if isinstance(value, str) and value.strip():
+        s = value.strip()
+        try:  # numeric epoch delivered as a string
+            n = float(s)
+            return int(n if n > 1_000_000_000_000 else n * 1000) if n > 0 else None
+        except ValueError:
+            pass
+        try:  # ISO-8601 (accept a trailing Z)
+            from datetime import datetime, timezone
+
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return int(dt.timestamp() * 1000)
+        except ValueError:
+            return None
+    return None
 
 
 def normalize_ksl(item: dict, search_zip: str = "84104") -> dict | None:
@@ -320,8 +377,12 @@ def normalize_ksl(item: dict, search_zip: str = "84104") -> dict | None:
                        parsed["model"] or "", parsed["trim"] or ""]
             title = " ".join(b for b in rebuilt if b).strip()
 
-    mileage = item.get("mileage")
-    if not isinstance(mileage, int) or mileage <= 0:
+    # Coerce mileage from int/float/numeric-string. The RSC stream often delivers
+    # numbers as floats ("78000.0") or strings ("78,000"); rejecting those forced
+    # mileage to null, which is a dedupe-key component (dedupe.ts), so the same car
+    # across scans would stop deduping — breaking price-drop/relist tracking.
+    mileage = _coerce_mileage(item.get("mileage"))
+    if not mileage:
         mileage = parse_mileage_text(description or "")
 
     year = item.get("makeYear") or parsed["year"]

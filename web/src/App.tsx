@@ -12,6 +12,22 @@ const IMG_FALLBACK =
     '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#E6EAF0"/><g fill="none" stroke="#AEB7C4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" transform="translate(140,120)"><path d="M2 26l4-12a4 4 0 0 1 3.8-2.6h40.4A4 4 0 0 1 54 14l4 12"/><path d="M6 34h52"/><circle cx="14" cy="34" r="3.2"/><circle cx="46" cy="34" r="3.2"/></g><text x="200" y="205" font-family="sans-serif" font-size="14" fill="#AEB7C4" text-anchor="middle">No photo available</text></svg>'
   );
 
+/**
+ * Only ever hand an http(s) URL to an <a href>. `l.url` is scraped/ingested
+ * data typed merely as string, and React does NOT sanitize hrefs — a listing
+ * whose url is `javascript:…` would execute in the app origin on click and can
+ * exfiltrate the localStorage watchlist/notes. Anything not http(s) is made inert.
+ */
+const safeHref = (u: string | null | undefined): string => {
+  if (!u) return "#";
+  try {
+    const proto = new URL(u, window.location.origin).protocol;
+    return proto === "http:" || proto === "https:" ? u : "#";
+  } catch {
+    return "#";
+  }
+};
+
 const money = (n: number | null | undefined) =>
   n == null ? "—" : "$" + Math.round(n).toLocaleString("en-US");
 const milesFmt = (n: number | null | undefined) =>
@@ -175,8 +191,12 @@ export default function App() {
         (titleOf(l) + " " + (l.vin || "") + " " + (l.location || "")).toLowerCase().includes(term)
       );
     if (make) list = list.filter((l) => l.make === make);
-    if (maxPrice) list = list.filter((l) => l.price <= maxPrice);
-    if (maxMiles) list = list.filter((l) => (l.mileage || 0) > 0 && (l.mileage || 0) <= maxMiles);
+    if (maxPrice != null && maxPrice > 0) list = list.filter((l) => l.price <= maxPrice);
+    // Unknown-mileage cars are KEPT under a max-miles filter — we can't confirm
+    // they're over the cap, and hiding a possible deal violates the "never
+    // pre-filter a deal away" rule. Only drop cars whose known mileage exceeds it.
+    if (maxMiles != null && maxMiles > 0)
+      list = list.filter((l) => l.mileage == null || l.mileage <= maxMiles);
     list.sort((a, b) => {
       switch (sort) {
         case "profit":
@@ -221,14 +241,14 @@ export default function App() {
           </div>
           <div className="search">
             {Ic.search}
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search make, model, trim or VIN…" autoComplete="off" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search make, model, trim or VIN…" autoComplete="off" aria-label="Search listings by make, model, trim or VIN" />
           </div>
-          <div className="seg" role="tablist">
-            <button className={view === "all" ? "active" : ""} onClick={() => setView("all")}>All deals</button>
-            <button className={view === "contact" ? "active" : ""} onClick={() => setView("contact")}>
+          <div className="seg" role="tablist" aria-label="Deal views">
+            <button role="tab" aria-selected={view === "all"} className={view === "all" ? "active" : ""} onClick={() => setView("all")}>All deals</button>
+            <button role="tab" aria-selected={view === "contact"} className={view === "contact" ? "active" : ""} onClick={() => setView("contact")}>
               Contact Now <span className="pill">{(listings ?? []).filter((l) => l.hot).length}</span>
             </button>
-            <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}>
+            <button role="tab" aria-selected={view === "saved"} className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}>
               Watchlist <span className="pill">{saved.length}</span>
             </button>
           </div>
@@ -241,13 +261,13 @@ export default function App() {
               {makes.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
-          <div className="field"><label>Max price</label>
-            <input className="ctrl tnum" type="number" inputMode="numeric" placeholder="Any"
-              value={maxPrice ?? ""} onChange={(e) => setMaxPrice(e.target.value ? +e.target.value : null)} />
+          <div className="field"><label htmlFor="f-maxprice">Max price</label>
+            <input id="f-maxprice" className="ctrl tnum" type="number" inputMode="numeric" min="0" placeholder="Any"
+              value={maxPrice ?? ""} onChange={(e) => { const n = +e.target.value; setMaxPrice(n > 0 ? n : null); }} />
           </div>
-          <div className="field"><label>Max miles</label>
-            <input className="ctrl tnum" type="number" inputMode="numeric" placeholder="Any"
-              value={maxMiles ?? ""} onChange={(e) => setMaxMiles(e.target.value ? +e.target.value : null)} />
+          <div className="field"><label htmlFor="f-maxmiles">Max miles</label>
+            <input id="f-maxmiles" className="ctrl tnum" type="number" inputMode="numeric" min="0" placeholder="Any"
+              value={maxMiles ?? ""} onChange={(e) => { const n = +e.target.value; setMaxMiles(n > 0 ? n : null); }} />
           </div>
           <div className="field"><label>Sort</label>
             <select className="ctrl" value={sort} onChange={(e) => setSort(e.target.value)}>
@@ -365,7 +385,7 @@ function Card({ l, saved, status, hasNote, onOpen, onSave, onCopy }: {
           </div>
         )}
         <div className="cfoot">
-          <a className="lnk" href={l.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{Ic.ext}View listing</a>
+          <a className="lnk" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{Ic.ext}View listing</a>
           {status ? (
             <span className="score-pill" style={{ color: statusColor[status], borderColor: statusColor[status] + "33" }}>
               <span className="dot" style={{ background: statusColor[status] }} />{status.charAt(0).toUpperCase() + status.slice(1)}
@@ -470,7 +490,7 @@ function Drawer({ l, saved, status, note, onClose, onSave, onCopy, onStatus, onN
           {l.description && (<><div className="sect-t">Seller description</div><p className="desc">{l.description}</p></>)}
 
           <div className="d-actions">
-            <a className="btn primary" href={l.url} target="_blank" rel="noopener noreferrer">{Ic.ext}View live listing</a>
+            <a className="btn primary" href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{Ic.ext}View live listing</a>
             <button className={"btn ghost" + (saved ? " on" : "")} onClick={onSave} title="Save to watchlist">{Ic.heart}</button>
           </div>
 

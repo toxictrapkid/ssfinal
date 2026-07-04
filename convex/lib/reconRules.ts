@@ -98,7 +98,11 @@ export function computeRecon(args: {
   let source: ReconResult["reconSource"] = "base";
 
   const issue = classifyDrivetrain(text);
-  let drivetrainPricedFromParts = false;
+  // A check-engine light is an ENGINE-side symptom, so it's already subsumed by
+  // an engine repair — but NOT by a transmission repair. Track whether the job
+  // being priced is specifically an engine job (named engine failure, or a
+  // generic failure whose worst-case component came out to the engine).
+  let engineJob = issue === "engine";
 
   if (issue) {
     const engine = args.engineCost;
@@ -120,7 +124,7 @@ export function computeRecon(args: {
     }
 
     if (pick) {
-      drivetrainPricedFromParts = true;
+      engineJob = engineJob || pick.part === "Engine";
       source = "parts";
       lines.push({
         label: `Used ${pick.part.toLowerCase()} (Grade-A median)`,
@@ -153,7 +157,10 @@ export function computeRecon(args: {
   if (ACCIDENT_RE.test(text)) {
     lines.push({ label: "Accident / damage (§4 bump)", amount: BUMP_ACCIDENT });
   }
-  if (CHECK_ENGINE_RE.test(text) && !drivetrainPricedFromParts && issue !== "engine") {
+  // Apply the check-engine bump unless an engine repair already covers it. A
+  // transmission (or non-drivetrain) job leaves an unrelated CEL uncosted, so it
+  // still gets the +$600 — dropping it there understated recon and overstated profit.
+  if (CHECK_ENGINE_RE.test(text) && !engineJob) {
     lines.push({ label: "Check engine light (§4 bump)", amount: BUMP_CHECK_ENGINE });
   }
   if (NEW_TIRES_BRAKES_RE.test(text)) {

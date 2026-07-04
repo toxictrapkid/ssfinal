@@ -329,7 +329,8 @@ export const activeListingIds = internalQuery({
 /** Cron: surface tool issues unresolved past the 15-minute grace window to Slack. */
 export const toolIssueWatch = internalAction({
   args: {},
-  handler: async (ctx) => {
+  // explicit return type breaks the internal.*-references-itself inference cycle
+  handler: async (ctx): Promise<{ notified: number }> => {
     const due = await ctx.runQuery(internal.airtable.openIssuesPastGrace, { graceMs: 15 * 60 * 1000 });
     for (const it of due) {
       await ctx.scheduler.runAfter(0, internal.slack.sendToolIssue, { issueId: it._id });
@@ -375,7 +376,10 @@ export const feedFreshness = internalQuery({
  */
 export const feedFreshnessWatch = internalAction({
   args: {},
-  handler: async (ctx) => {
+  // explicit return type breaks the internal.*-references-itself inference cycle
+  handler: async (
+    ctx
+  ): Promise<{ ok?: boolean; reason?: string; stale?: boolean; ageHours?: number }> => {
     const staleHours = Number(process.env.FEED_STALE_HOURS ?? "3");
     const f = await ctx.runQuery(internal.airtable.feedFreshness, {});
     if (f.activeSearches === 0) return { ok: true, reason: "no active searches" };

@@ -143,8 +143,16 @@ def dispatch_once(args: argparse.Namespace) -> dict:
 
     due = convex_run("searches:listDue", json.dumps({"now": int(time.time() * 1000)})) or []
     log.info("due searches: %d", len(due))
-    settings = convex_run("settings:get") or {}
-    fb_cookie = settings.get("fbSessionCookie")
+    # settings:get is now a public-safe projection that STRIPS the FB cookie (it is
+    # secret to read). Pull the raw value from the internal query instead — `npx
+    # convex run` authenticates with admin credentials, so it can call it. Degrade
+    # gracefully (no cookie -> FB source simply stays deferred) if it's unavailable.
+    fb_cookie = None
+    try:
+        settings = convex_run("settings:getInternal") or {}
+        fb_cookie = settings.get("fbSessionCookie")
+    except Exception as e:  # noqa: BLE001 — cookie is optional; never fail the run over it
+        log.warning("settings:getInternal unavailable (%s); running without FB cookie", str(e)[:120])
     results = []
     with ThreadPoolExecutor(max_workers=CONCURRENCY_CAP) as pool:
         for result in pool.map(

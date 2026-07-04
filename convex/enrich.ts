@@ -71,6 +71,23 @@ export const setDescription = internalMutation({
       if (!l.photoUrl) patch.photoUrl = a.photos[0];
     }
     await ctx.db.patch(a.listingId, patch);
+
+    // Re-score after enrichment. The initial scoring pass ran with description
+    // = null (the search page omits it), so a drivetrain failure revealed here
+    // was NEVER priced from partsCosts (RULES #3b) and the mechanic-special
+    // alert never fired. Backfilled mileage/title also change value. Re-score
+    // whenever enrichment materially changed the inputs so recon + the
+    // once-per-car alert both catch up (scoreListing -> applyScore -> alert).
+    const rescoreWorthy =
+      a.mechanicSpecial !== (l.mechanicSpecial ?? false) ||
+      patch.description !== l.description ||
+      "mileage" in patch ||
+      "titleStatus" in patch ||
+      "vin" in patch ||
+      "trim" in patch;
+    if (rescoreWorthy) {
+      await ctx.scheduler.runAfter(0, internal.scoring.scoreListing, { listingId: a.listingId });
+    }
   },
 });
 

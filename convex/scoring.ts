@@ -51,11 +51,18 @@ export const scoreListing = internalAction({
 
     if (haveYmm && bucket) {
       const ymm = `${listing.year}|${listing.make}|${listing.model}`;
+      // Fetch comps over the whole 20k mileage BUCKET, not a window centered on
+      // this listing's mileage. adjustValue() later treats the comp median as if
+      // it sat at the bucket midpoint (+$0.06/mi from there); if the sample were
+      // centered on the listing's own mileage instead, that adjustment would
+      // double-count (over/under-valuing by up to ~$1,200 and flipping HOT), and
+      // it would be inconsistent with the (ymm, bucket) cache key that reuses one
+      // median for every mileage in the bucket.
       comp = await ctx.runAction(internal.comps.getOrFetchComp, {
         ymm,
         mileageBucket: bucket.label,
-        mileageLo: Math.max(0, (listing.mileage ?? 0) - 10000),
-        mileageHi: (listing.mileage ?? 0) + 10000,
+        mileageLo: Math.max(0, bucket.midpoint - 10000),
+        mileageHi: bucket.midpoint + 10000,
         zip: search?.zip ?? "84104",
         radiusMiles: search?.radiusMiles ?? 150,
       });

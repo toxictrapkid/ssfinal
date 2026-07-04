@@ -2,7 +2,7 @@
  * Automated deal scanner — runs entirely inside Convex (cron-driven, 24/7).
  *
  * Pipeline: scrapeTick scrapes KSL (Bright Data Web Unlocker) into the scrape
- * queue every 2 min. Appraisal is handled by the Laser Appraiser browser bridge
+ * queue every 1 min. Appraisal is handled by the Laser Appraiser browser bridge
  * (convex/laser.ts), which looks up each VIN in the operator's logged-in Laser
  * session and posts book values back via laser.appraise. enrichTick is the
  * in-Convex fallback drain (MarketCheck comps / depreciation curve) used only
@@ -128,16 +128,21 @@ async function scanBand(
 }
 
 /**
- * Continuous scrape — runs every 2 min, stores every buy-box candidate in the
+ * Continuous scrape — runs every 1 min, stores every buy-box candidate in the
  * queue. Deep coverage via the rotating grid cell + a newest-first fast-lane so
- * brand-new posts hit the queue within ~2 min.
+ * brand-new posts hit the queue within ~1 min.
  */
 export const scrapeTick = internalAction({
   args: {},
   handler: async (ctx) => {
     if (process.env.SCAN_ENABLED !== "true") return { paused: true };
     if (!brightDataConfigured()) return { error: "BRIGHTDATA_API_TOKEN not set" };
-    const cell = GRID[Math.floor(Date.now() / 120000) % GRID.length];
+    // Advance one grid cell per tick. The rotation window MUST match the cron
+    // interval (crons.ts fires this every 1 min) — a 2-min window here made every
+    // cell get scraped on two consecutive ticks, doubling paid Web-Unlocker
+    // requests and halving how fast the grid covers the whole market.
+    const TICK_MS = 60000;
+    const cell = GRID[Math.floor(Date.now() / TICK_MS) % GRID.length];
     const base: KslSearchConfig = {
       ...BASE_CONFIG,
       priceMin: cell.pmin,
@@ -168,7 +173,7 @@ export const scrapeTick = internalAction({
     }
     // Fast-lane: catch BRAND-NEW posts immediately — newest-first across the whole
     // buy-box (no price/mileage band) for both age profiles × both titles, so a
-    // freshly listed car hits the queue within ~2 min instead of a full rotation.
+    // freshly listed car hits the queue within ~1 min instead of a full rotation.
     if (process.env.FASTLANE !== "false") {
       for (const p of AGE_PROFILES) {
         const wide: KslSearchConfig = {
@@ -192,7 +197,7 @@ export const scrapeTick = internalAction({
 });
 
 /**
- * Deferred enrichment cron — runs every 2 min.
+ * Deferred enrichment cron — runs every 1 min.
  *  - If the Laser browser bridge owns appraisal (LASER_BRIDGE=true), this does
  *    nothing (the bridge posts book values to laser.appraise).
  *  - Otherwise it drains pending queue rows straight into the feed via

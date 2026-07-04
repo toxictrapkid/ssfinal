@@ -194,16 +194,31 @@ def main(argv: list[str] | None = None) -> int:
 
     totals = {"inserted": 0, "updated": 0, "priceDrops": 0, "relists": 0,
               "skipped": 0, "preSkipped": 0}
+    # Isolate each batch: one batch failing (transient 422, rotated secret) must
+    # not crash the run and silently drop every later batch. Record the error,
+    # keep going, always emit the summary, and exit 2 if any batch failed — so the
+    # orchestrator always gets a parseable result and the correct failure code.
+    batch_errors: list[str] = []
     with requests.Session() as session:
         for start in range(0, len(all_listings), BATCH_SIZE):
             batch = all_listings[start : start + BATCH_SIZE]
-            result = post_batch(
-                session, ingest_url, ingest_secret, config.get("searchId"), batch,
-            )
+            try:
+                result = post_batch(
+                    session, ingest_url, ingest_secret, config.get("searchId"), batch,
+                )
+            except Exception as exc:  # noqa: BLE001 — isolate; surfaced in summary
+                batch_errors.append(str(exc)[:200])
+                log.error("batch at offset %d failed: %s", start, exc)
+                continue
             summary["posted"] += len(batch)
             for key in totals:
                 totals[key] += int(result.get(key, 0))
     summary["ingest"] = totals
+    if batch_errors:
+        summary["ingestErrors"] = batch_errors
+        print(json.dumps(summary))
+        log.error("run finished with %d batch failure(s)", len(batch_errors))
+        return 2
 
     print(json.dumps(summary))
     log.info("run complete: %s", summary)

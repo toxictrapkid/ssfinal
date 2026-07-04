@@ -17,6 +17,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
+import { slackEscape } from "./lib/slackText";
 
 const CHANNELS: Record<string, string[]> = {
   owner_approvals: ["SLACK_WEBHOOK_OWNER_APPROVALS"],
@@ -73,7 +74,8 @@ export const sendHotLead = internalAction({
   handler: async (ctx, { listingId }) => {
     const l: Doc<"listings"> | null = await ctx.runQuery(internal.notifications.getListing, { listingId });
     if (!l) return { sent: false, reason: "listing gone" };
-    const vehicle = [l.year, l.make, l.model, l.trim].filter(Boolean).join(" ") || l.title;
+    // Escape scraped text (falls back to the seller-controlled title) before Slack mrkdwn.
+    const vehicle = slackEscape([l.year, l.make, l.model, l.trim].filter(Boolean).join(" ") || l.title);
     const missing = missingList(l);
     const action = !l.vin
       ? "Employee needs to request VIN and verify values."
@@ -114,7 +116,8 @@ export const sendHotLead = internalAction({
 /** Unresolved tool issue -> #carhunter-errors. */
 export const sendToolIssue = internalAction({
   args: { issueId: v.id("toolIssues") },
-  handler: async (ctx, { issueId }) => {
+  // explicit return type breaks the internal.*-references-itself inference cycle
+  handler: async (ctx, { issueId }): Promise<{ sent: boolean; status?: number; reason?: string }> => {
     const it = await ctx.runQuery(internal.airtable.getToolIssue, { issueId });
     if (!it) return { sent: false, reason: "issue gone" };
     const since = new Date(it.firstSeenAt).toISOString().slice(0, 16).replace("T", " ");
@@ -134,7 +137,8 @@ export const sendToolIssue = internalAction({
 /** End-of-day desk summary -> #carhunter-daily-desk. */
 export const sendEndOfDay = internalAction({
   args: {},
-  handler: async (ctx) => {
+  // explicit return type breaks the internal.*-references-itself inference cycle
+  handler: async (ctx): Promise<{ sent: boolean; status?: number; reason?: string }> => {
     const s = await ctx.runQuery(internal.airtable.dailySummary, {});
     const lines = [
       "*End-of-Day Summary*",

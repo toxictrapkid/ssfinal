@@ -160,6 +160,64 @@ def test_epoch_ms_passthrough():
     assert _epoch_ms(None) is None
 
 
+def test_epoch_ms_iso_and_numeric_strings():
+    from parse import _epoch_ms
+
+    # ISO-8601 (the Web Unlocker RSC form) must parse, not fall to None
+    assert _epoch_ms("2024-06-07T12:00:00Z") == 1717761600000
+    assert _epoch_ms("2024-06-07T12:00:00+00:00") == 1717761600000
+    # numeric epochs delivered as strings
+    assert _epoch_ms("1749350000") == 1749350000 * 1000
+    assert _epoch_ms("1749350000123") == 1749350000123
+    # garbage / empty -> None (never a bogus daysListed anchor)
+    assert _epoch_ms("not a date") is None
+    assert _epoch_ms("") is None
+    assert _epoch_ms(True) is None  # bool is an int subclass — reject it
+
+
+def test_coerce_mileage_accepts_float_and_string():
+    from parse import _coerce_mileage
+
+    assert _coerce_mileage(78000) == 78000
+    assert _coerce_mileage(78000.0) == 78000  # RSC often serializes numbers as floats
+    assert _coerce_mileage("78,000") == 78000  # or as strings with separators
+    assert _coerce_mileage("78000") == 78000
+    assert _coerce_mileage(0) is None
+    assert _coerce_mileage(-5) is None
+    assert _coerce_mileage(None) is None
+    assert _coerce_mileage("n/a") is None
+    assert _coerce_mileage(True) is None  # bool must never read as a mileage
+
+
+def test_float_mileage_survives_into_dedupe_component(ksl_items):
+    # A float mileage must reach the normalized output (it's a dedupe-key input),
+    # not get dropped to None and force the source:id fallback key.
+    item = dict(ksl_items[0])
+    item["mileage"] = 78214.0
+    normalized_item = normalize_ksl(item, search_zip="84104")
+    assert normalized_item["mileage"] == 78214
+
+
+def test_looks_like_dealer_catches_dealer_variants():
+    # broadened structured check: any sellerType containing "dealer" is a dealer,
+    # not just the exact tokens — the live path has no description to fall back on
+    assert looks_like_dealer("Certified Dealer", None)
+    assert looks_like_dealer("Franchise Dealer", None)
+    assert looks_like_dealer("DEALERSHIP INC", None)
+    assert looks_like_dealer("dealer", None)
+    # a genuine FSBO value contains no "dealer" and stays private
+    assert not looks_like_dealer("For Sale By Owner", "one owner, clean")
+
+
+def test_make_extraction_prefers_earliest_brand_in_title():
+    # "seat"/"smart" are real (foreign) marques in the dictionary; a real make
+    # appearing EARLIER in the string must win over them, not lose on dict order.
+    assert parse_title("2018 Honda Accord with new leather seat")["make"] == "Honda"
+    assert parse_title("2019 Ford Escape, smart key included")["make"] == "Ford"
+    # the multi-word / genuine cases still resolve correctly
+    assert parse_title("2020 Toyota Camry SE")["make"] == "Toyota"
+
+
 def test_unknown_make_model_strings_trigger_title_fallback(ksl_items):
     item = dict(ksl_items[0])
     item.update(make="Unknown", model="Unknown", trim=None, makeYear=0,
