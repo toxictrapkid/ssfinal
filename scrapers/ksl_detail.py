@@ -46,7 +46,7 @@ TRANS_RE = re.compile(
 GENERIC_BROKEN_RE = re.compile(
     r"\b(mechanic'?s? special|doesn'?t run|does not run|won'?t start|doesn'?t start|"
     r"not running|non.?running|won'?t run|as.?is,? broken|"
-    r"dead(?!\s*(battery|batteries|key|fob|remote|spot|pixel))|needs? work to run)\b",
+    r"dead(?!\s*(battery|batteries|key|fob|remote|spot|pixel|pedal))|needs? work to run)\b",
     re.I,
 )
 ENGINE_CONTEXT_RE = re.compile(r"\b(engine|motor)\b", re.I)

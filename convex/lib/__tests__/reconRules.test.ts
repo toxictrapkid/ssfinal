@@ -74,6 +74,9 @@ describe("drivetrain classification", () => {
     expect(classifyDrivetrain("dead battery, needs a jump")).toBe(null);
     expect(classifyDrivetrain("found it dead in the driveway")).toBe("generic");
   });
+  it("'dead pedal' (a footrest) is NOT a mechanic special", () => {
+    expect(classifyDrivetrain("aftermarket dead pedal installed, runs great")).toBe(null);
+  });
 });
 
 describe("parts-based recon (RULES #3b)", () => {

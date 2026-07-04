@@ -461,6 +461,7 @@ export const dealUpsert = internalMutation({
         .withIndex("by_dedupeKey", (q) => q.eq("dedupeKey", dedupeKey))
         .first();
       if (!existing) {
+        const alertOnInsert = !!(notify && d.hot);
         const id = await ctx.db.insert("listings", {
           dedupeKey,
           source: d.source,
@@ -486,20 +487,22 @@ export const dealUpsert = internalMutation({
           status: "active",
           decision: "new",
           matchedSearchId: searchId,
+          // stamp the price we alerted at so a later drop re-alerts exactly once
+          ...(alertOnInsert ? { lastAlertPrice: d.price } : {}),
           ...scoring,
         });
         result.inserted++;
         if (d.hot) result.hot++;
         // Alert on NEW Contact-Now deals (notify=true: live cron, not backfill):
         // SMS via Mobile Text Alerts + Slack via the Incoming Webhook.
-        if (notify && d.hot) {
+        if (alertOnInsert) {
           await ctx.scheduler.runAfter(0, internal.notifications.sendDealSms, { listingId: id });
         }
         // Airtable CRM sync (new lead). syncDeal fires the rich HOT Slack alert
         // (with the Airtable record link) when notifyHot is true.
         await ctx.scheduler.runAfter(0, internal.airtable.syncDeal, {
           listingId: id,
-          notifyHot: !!(notify && d.hot),
+          notifyHot: alertOnInsert,
         });
         continue;
       }
@@ -525,12 +528,25 @@ export const dealUpsert = internalMutation({
           result.priceDrops++;
         }
       }
+      // Re-alert when a still-HOT deal drops BELOW the price we last alerted at
+      // (README: once per car, again on a price drop). The Laser path previously
+      // only ever alerted on first insert — a price drop into/further-into HOT,
+      // or a relisted HOT car, silently went unnotified.
+      const reAlert =
+        !!notify &&
+        d.hot &&
+        priceDropped &&
+        (existing.lastAlertPrice === undefined || d.price < existing.lastAlertPrice);
+      if (reAlert) patch.lastAlertPrice = d.price;
       await ctx.db.patch(existing._id, patch);
       result.updated++;
       if (d.hot) result.hot++;
-      // Airtable CRM sync (lead updated). Debounced inside syncDeal; updates do
-      // not re-fire the HOT Slack alert (only new HOT leads do).
-      await ctx.scheduler.runAfter(0, internal.airtable.syncDeal, { listingId: existing._id, notifyHot: false });
+      if (reAlert) {
+        await ctx.scheduler.runAfter(0, internal.notifications.sendDealSms, { listingId: existing._id });
+      }
+      // Airtable CRM sync (lead updated). Debounced inside syncDeal; only a
+      // qualifying price-drop re-fires the HOT Slack alert.
+      await ctx.scheduler.runAfter(0, internal.airtable.syncDeal, { listingId: existing._id, notifyHot: reAlert });
     }
     return result;
   },

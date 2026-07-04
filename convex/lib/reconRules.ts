@@ -62,7 +62,7 @@ const TRANS_RE =
 // "dead" counts (§4 doesn't-start family) but not "dead battery/key fob" —
 // a $150 jump-start is not a drivetrain job (M5 reviewer advisory A)
 const GENERIC_BROKEN_RE =
-  /\b(mechanic'?s? special|doesn'?t run|does not run|won'?t start|doesn'?t start|not running|non.?running|won'?t run|as.?is,? broken|dead(?!\s*(battery|batteries|key|fob|remote|spot|pixel))|needs? work to run)\b/i;
+  /\b(mechanic'?s? special|doesn'?t run|does not run|won'?t start|doesn'?t start|not running|non.?running|won'?t run|as.?is,? broken|dead(?!\s*(battery|batteries|key|fob|remote|spot|pixel|pedal))|needs? work to run)\b/i;
 const ENGINE_CONTEXT_RE = /\b(engine|motor)\b/i;
 
 const SALVAGE_REBUILT_RE = /\b(salvage|rebuilt|reconstructed|branded)\b/i;

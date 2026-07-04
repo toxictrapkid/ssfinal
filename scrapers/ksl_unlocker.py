@@ -159,7 +159,9 @@ def _rsc_to_api_item(r: dict) -> dict:
     titleType. The RSC record nests location.{} and uses primaryImage.url /
     displayAt / createdAt, and omits titleType + description on the search page.
     """
-    loc = r.get("location") or {}
+    # location is normally a nested object, but KSL has been seen to send a scalar;
+    # guard so a single odd record can't AttributeError the whole scrape.
+    loc = r.get("location") if isinstance(r.get("location"), dict) else {}
     img = r.get("primaryImage") or {}
     photo: Any = None
     if isinstance(img, dict) and img.get("url") and not r.get("noImage"):
@@ -204,10 +206,20 @@ def fetch_all_items(config: dict[str, Any], max_pages: int = DEFAULT_MAX_PAGES) 
             if rid in seen:
                 continue
             seen.add(rid)
-            items.append(_rsc_to_api_item(r))
+            try:
+                items.append(_rsc_to_api_item(r))
+            except Exception as exc:  # one malformed record must not kill the batch
+                log.warning("skipping unadaptable RSC record id=%s: %s", rid, exc)
+                continue
             new += 1
-        if new == 0:
+        if records and new == 0:
             log.info("page %d added no new listings; stopping pagination", page)
+            break
+        if not records:
+            # A rendered page with zero extractable records usually means KSL's
+            # RSC layout shifted (our matcher missed) or a block slipped through —
+            # not the same as "no cars matched". Surface it instead of silent [].
+            log.warning("page %d yielded 0 listing records — possible KSL layout change or block", page)
             break
         if page < max_pages:
             time.sleep(1.5)  # polite pacing between unlocker calls
